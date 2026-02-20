@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bunn Communications Lead Engine</title>
+    <link rel="icon" type="image/webp" href="/logo.webp">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Landing Page Specific Overrides */
+        body {
+            overflow-y: auto;
+            display: block;
+            height: auto;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 6rem 2rem;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            background: none;
+            -webkit-text-fill-color: white;
+            color: white;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: rgba(255, 255, 255, 0.8);
+            max-width: 800px;
+            margin: 0 auto 3rem;
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .section {
+            padding: 5rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.2rem;
+            margin-bottom: 3rem;
+            color: var(--primary-color);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .card-feature {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .card-feature:hover {
+            transform: translateY(-5px);
+        }
+
+        .icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .step-num {
+            background: var(--accent-color);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        footer {
+            background: var(--primary-color);
+            color: white;
+            padding: 4rem 2rem;
+            text-align: center;
+            margin-top: auto;
+        }
+
+        /* Navbar specific to landing */
+        .landing-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav class="landing-nav">
+        <div class="brand" style="margin:0; color: var(--primary-color);">
+            <img src="/logo.webp" alt="Bunn Comm" style="height: 40px;" onerror="this.style.display='none'">
+            <span style="font-size: 1.2rem; font-weight: 700;">Bunn Communications, Inc</span>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div style="max-width: 1200px; margin: 0 auto;">
+            <h1>Smart B2B Lead Intelligence for<br>North Carolina Businesses</h1>
+            <p>Identify, verify, and qualify decision-makers for VoIP, security, network infrastructure, and AI
+                communication solutions.</p>
+            <div class="cta-group">
+                <a href="/app.html" class="primary-btn" style="font-size: 1.1rem; padding: 1rem 2rem;">Get Started</a>
+            </div>
+        </div>
+    </header>
+
+    <section class="section">
+        <h2 class="section-title">Targeted Solutions</h2>
+        <div class="grid">
+            <div class="card-feature">
+                <span class="icon">📞</span>
+                <h3>VoIP Phone Systems</h3>
+                <p>Find businesses ready to upgrade their communication infrastructure.</p>
+            </div>
+            <div class="card-feature">
+                <span class="icon">🔌</span>
+                <h3>Network Cabling</h3>
+                <p>Identify new construction and renovation projects needing structured cabling.</p>
+            </div>
+            <div class="card-feature">
+                <span class="icon">📷</span>
+                <h3>Security Systems</h3>
+                <p>Locate facilities requiring advanced surveillance and access control.</p>
+            </div>
+            <div class="card-feature">
+                <span class="icon">🤖</span>
+                <h3>AI Phone Agents</h3>
+                <p>Target companies looking to automate customer support and intake.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section"
+        style="background: white; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);">
+        <h2 class="section-title">How It Works</h2>
+        <div class="grid">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div>
+                    <h3>Search by City</h3>
+                    <p>Enter any North Carolina city or ZIP code to target your local market.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div>
+                    <h3>Discover Businesses</h3>
+                    <p>Our engine scans multiple directories to find relevant companies.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div>
+                    <h3>Verify Decision Makers</h3>
+                    <p>We extract and verify emails for CEOs, Founders, and Managers.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <div>
+                    <h3>Export Leads</h3>
+                    <p>Download clean, verified CSV lists for your sales team.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2 class="section-title">Why Bunn Communications?</h2>
+        <div
+            style="text-align: center; max-width: 800px; margin: 0 auto; line-height: 1.8; font-size: 1.1rem; color: var(--text-color);">
+            <p>
+                Bunn Communications, Inc is a leader in business technology solutions.
+                We specialize in integrating state-of-the-art Telecommunications, robust Business Networking,
+                secure Infrastructure, and cutting-edge AI Communication Systems.
+                This platform is built internally to empower our sales force with the best data available.
+            </p>
+        </div>
+    </section>
+
+    <footer>
+        <h3>Bunn Communications, Inc</h3>
+        <p style="opacity: 0.7; margin-top: 1rem;">North Carolina, USA</p>
+        <p style="opacity: 0.5; margin-top: 2rem; font-size: 0.9rem;">&copy; 2026 Bunn Communications, Inc. All rights
+            reserved.</p>
+    </footer>
+
+</body>
+
+</html>

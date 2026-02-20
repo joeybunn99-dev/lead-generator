@@ -1,0 +1,80 @@
+{
+  "name": "Bunn Leads → Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "3307c3cd-48b1-4f15-a2c8-21896cfab4be",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Receive Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "3307c3cd-48b1-4f15-a2c8-21896cfab4be"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Business Name":  "={{ $json.business_name }}",
+            "Website":        "={{ $json.website }}",
+            "Email":          "={{ $json.email }}",
+            "Phone":          "={{ $json.phone }}",
+            "City":           "={{ $json.city }}",
+            "Address":        "={{ $json.address }}",
+            "Lead Score":     "={{ $json.lead_score }}",
+            "Rating":         "={{ $json.rating }}",
+            "Verified Email": "={{ $json.verified_email }}",
+            "Source":         "={{ $json.source }}",
+            "Timestamp":      "={{ $json.timestamp }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-0002-0002-000000000002",
+      "name": "Add to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Receive Lead": {
+      "main": [
+        [
+          {
+            "node": "Add to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

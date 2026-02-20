@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NC B2B Lead Engine</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Login Overlay -->
+    <div id="login-overlay">
+        <div class="login-card">
+            <img src="/logo.webp" alt="Bunn Communications" class="login-logo"
+                onerror="this.src='https://via.placeholder.com/150x50?text=Bunn+Comm'">
+            <h2 style="color:var(--primary-color); margin-bottom: 0.5rem;">Welcome Back</h2>
+            <p style="margin-bottom: 2rem; color: var(--text-muted);">Bunn Communications Lead Engine</p>
+            <form id="login-form">
+                <input type="text" class="login-input" placeholder="Username" id="login-user">
+                <input type="password" class="login-input" placeholder="Password" id="login-pass">
+                <button type="submit" class="primary-btn" style="width:100%">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <img src="/logo.webp" alt="Logo" class="brand-logo" onerror="this.style.display='none'">
+                <span>Bunn Leads</span>
+            </div>
+            <nav>
+                <div class="nav-item active" data-tab="dashboard" onclick="window.switchTab('dashboard')">
+                    <span class="nav-icon">📊</span> Dashboard
+                </div>
+                <div class="nav-item" data-tab="generate" onclick="window.switchTab('generate')">
+                    <span class="nav-icon">🎯</span> Generate Leads
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                &copy; 2026 Bunn Communications, Inc<br>Internal Use Only
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1 id="page-title">Lead Generation Engine</h1>
+                    <p id="page-subtitle">Identify, Verify, and Close B2B Prospects.</p>
+                </div>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <button class="secondary-btn" id="admin-settings-btn">⚙ Admin Settings</button>
+                    <button class="secondary-btn" id="logout-btn">Sign Out</button>
+                </div>
+            </header>
+
+            <!-- Admin Settings Modal -->
+            <div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:center;justify-content:center">
+                <div style="background:var(--bg-primary,#fff);border-radius:12px;padding:2rem;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative">
+                    <h2 style="margin:0 0 1.5rem;font-size:1.2rem">Admin Settings</h2>
+                    <button id="settings-close-btn" style="position:absolute;top:1rem;right:1rem;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--text-muted,#888)">✕</button>
+
+                    <!-- Logo Upload -->
+                    <div style="margin-bottom:1.5rem">
+                        <label style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:0.5rem">Company Logo</label>
+                        <p style="font-size:0.82rem;color:var(--text-muted,#888);margin:0 0 0.75rem">Replaces the logo shown in the sidebar and login screen.</p>
+                        <button class="secondary-btn" id="settings-logo-btn">Upload Logo</button>
+                        <input type="file" id="logo-upload" hidden accept="image/*">
+                        <span id="logo-upload-status" style="margin-left:0.75rem;font-size:0.85rem;color:var(--text-muted,#888)"></span>
+                    </div>
+
+                    <hr style="border:none;border-top:1px solid var(--border-color,#e0e4ea);margin-bottom:1.5rem">
+
+                    <!-- Apollo API Key -->
+                    <div style="margin-bottom:1.5rem">
+                        <label style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:0.5rem">Apollo.io API Key</label>
+                        <p style="font-size:0.82rem;color:var(--text-muted,#888);margin:0 0 0.75rem">Used for contact enrichment. Get yours at app.apollo.io → Settings → API.</p>
+                        <input type="password" id="settings-apollo-key" placeholder="Paste API key here"
+                            style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border-color,#ddd);border-radius:6px;font-size:0.9rem;box-sizing:border-box;background:var(--bg-secondary,#f8f9fa);color:var(--text-primary,#111)">
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;gap:0.5rem">
+                        <button class="secondary-btn" id="settings-cancel-btn">Cancel</button>
+                        <button class="primary-btn" id="settings-save-btn">Save Settings</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════
+                 DASHBOARD TAB
+            ══════════════════════════════════════ -->
+            <div id="dashboard-tab" class="tab-content active">
+
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <p class="stat-label">Total Leads</p>
+                        <span id="total-leads" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-label">Verified Emails</p>
+                        <span id="verified-emails" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-label">Contacted</p>
+                        <span id="contacted-count" class="stat-value">0</span>
+                    </div>
+                </div>
+
+                <!-- Bulk Import Banner -->
+                <div id="bulk-import-card" class="section-card" style="margin-bottom:1rem">
+                    <div class="section-card-header" style="align-items:center">
+                        <div>
+                            <h2 style="margin-bottom:0.25rem">NC Business Database</h2>
+                            <p style="margin:0;color:var(--text-muted);font-size:0.9rem">Pre-populate your database with businesses from all 105 NC cities via Google Maps.</p>
+                        </div>
+                        <button id="bulk-import-btn" class="primary-btn">⬇ Import All NC Cities</button>
+                    </div>
+                    <div id="bulk-progress-wrap" class="hidden" style="margin-top:1rem">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem">
+                            <span id="bulk-status-text" style="font-size:0.9rem;color:var(--text-muted)">Starting…</span>
+                            <span id="bulk-counts" style="font-size:0.9rem;font-weight:600"></span>
+                        </div>
+                        <div style="background:var(--border-color);border-radius:8px;height:10px;overflow:hidden">
+                            <div id="bulk-progress-bar" style="height:100%;width:0%;background:var(--accent-color);transition:width 0.4s;border-radius:8px"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Apollo Enrichment Card -->
+                <div id="apollo-card" class="section-card" style="margin-bottom:1rem">
+                    <div class="section-card-header" style="align-items:center">
+                        <div>
+                            <h2 style="margin-bottom:0.25rem">Apollo.io Contact Enrichment</h2>
+                            <p style="margin:0;color:var(--text-muted);font-size:0.9rem">Find decision maker names, titles &amp; verified emails for businesses in your database.</p>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                            <input type="password" id="apollo-key-input" placeholder="Paste Apollo.io API key"
+                                style="padding:0.45rem 0.75rem;border:1px solid var(--border-color);border-radius:6px;font-size:0.88rem;width:230px;background:var(--bg-secondary);color:var(--text-primary)">
+                            <button id="apollo-enrich-btn" class="primary-btn" style="background:#7c3aed">✨ Enrich Contacts</button>
+                        </div>
+                    </div>
+                    <div id="apollo-progress-wrap" class="hidden" style="margin-top:1rem">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem">
+                            <span id="apollo-status-text" style="font-size:0.9rem;color:var(--text-muted)">Starting…</span>
+                            <span id="apollo-counts" style="font-size:0.9rem;font-weight:600"></span>
+                        </div>
+                        <div style="background:var(--border-color);border-radius:8px;height:10px;overflow:hidden">
+                            <div id="apollo-progress-bar" style="height:100%;width:0%;background:#7c3aed;transition:width 0.4s;border-radius:8px"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <div class="section-card-header">
+                        <h2>Leads Database</h2>
+                        <button id="export-btn" class="secondary-btn" disabled>⬇ Export CSV</button>
+                    </div>
+
+                    <div class="filters-toolbar">
+                        <input type="text" id="search-filter" placeholder="🔍  Search name, city...">
+                        <select id="city-filter">
+                            <option value="">All Cities</option>
+                        </select>
+                        <select id="score-filter">
+                            <option value="60">Score 60+ (High Quality)</option>
+                            <option value="0">All Scores</option>
+                        </select>
+                        <select id="status-filter">
+                            <option value="">All Statuses</option>
+                            <option value="Valid">Valid Email Only</option>
+                        </select>
+                        <label class="checkbox-inline">
+                            <input type="checkbox" id="hide-contacted">
+                            <span>Hide Contacted</span>
+                        </label>
+                    </div>
+
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="sortable" onclick="window.sortBy('score')">Score ↕</th>
+                                    <th>Business</th>
+                                    <th>Contact</th>
+                                    <th>Title</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>City</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leads-table-body"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination-controls">
+                        <button id="prev-page" class="secondary-btn" disabled>← Previous</button>
+                        <span id="page-info" class="page-info-label">Page 1 of 1</span>
+                        <button id="next-page" class="secondary-btn" disabled>Next →</button>
+                        <select id="items-per-page">
+                            <option value="10">10 / page</option>
+                            <option value="25">25 / page</option>
+                            <option value="50">50 / page</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════
+                 GENERATE LEADS TAB
+            ══════════════════════════════════════ -->
+            <div id="generate-tab" class="tab-content hidden">
+
+                <!-- Search Mode Card -->
+                <div class="gl-mode-card">
+                    <div class="gl-mode-tabs">
+                        <button class="gl-mode-btn active" id="gl-mode-quick">🔍 Quick Search</button>
+                        <button class="gl-mode-btn" id="gl-mode-discovery">🚀 Deep Discovery</button>
+                    </div>
+
+                    <!-- Quick Search Panel -->
+                    <div id="gl-quick-panel" class="gl-form-panel">
+                        <div class="gl-form-row">
+                            <div class="input-group">
+                                <label>Business Category</label>
+                                <select id="gl-category">
+                                    <option value="local business">All Local Businesses</option>
+                                    <option value="IT services technology managed services">IT &amp; Technology</option>
+                                    <option value="professional services business consulting">Professional Services</option>
+                                    <option value="construction contractors home services">Construction &amp; Contractors</option>
+                                    <option value="manufacturing industrial wholesale">Manufacturing &amp; Industrial</option>
+                                    <option value="property management real estate">Property Management</option>
+                                    <option value="insurance agency financial services">Insurance &amp; Finance</option>
+                                    <option value="law firm legal services attorney">Legal Services</option>
+                                    <option value="accounting tax bookkeeping CPA">Accounting &amp; Tax</option>
+                                    <option value="marketing advertising agency">Marketing &amp; Advertising</option>
+                                    <option value="restaurant food service catering">Restaurants &amp; Food</option>
+                                    <option value="retail store shopping">Retail</option>
+                                    <option value="auto services automotive car dealer">Auto Services</option>
+                                    <option value="cleaning janitorial maintenance">Cleaning &amp; Maintenance</option>
+                                    <option value="landscaping lawn care">Landscaping</option>
+                                    <option value="security services">Security Services</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Location</label>
+                                <select id="gl-location-select">
+                                    <option value="Aberdeen, NC">Aberdeen, NC</option>
+                                    <option value="Apex, NC">Apex, NC</option>
+                                    <option value="Archdale, NC">Archdale, NC</option>
+                                    <option value="Asheboro, NC">Asheboro, NC</option>
+                                    <option value="Asheville, NC">Asheville, NC</option>
+                                    <option value="Atlantic Beach, NC">Atlantic Beach, NC</option>
+                                    <option value="Ayden, NC">Ayden, NC</option>
+                                    <option value="Beaufort, NC">Beaufort, NC</option>
+                                    <option value="Belmont, NC">Belmont, NC</option>
+                                    <option value="Black Mountain, NC">Black Mountain, NC</option>
+                                    <option value="Boiling Spring Lakes, NC">Boiling Spring Lakes, NC</option>
+                                    <option value="Boone, NC">Boone, NC</option>
+                                    <option value="Brevard, NC">Brevard, NC</option>
+                                    <option value="Burlington, NC">Burlington, NC</option>
+                                    <option value="Butner, NC">Butner, NC</option>
+                                    <option value="Carrboro, NC">Carrboro, NC</option>
+                                    <option value="Cary, NC">Cary, NC</option>
+                                    <option value="Chapel Hill, NC">Chapel Hill, NC</option>
+                                    <option value="Charlotte, NC">Charlotte, NC</option>
+                                    <option value="Clayton, NC">Clayton, NC</option>
+                                    <option value="Clemmons, NC">Clemmons, NC</option>
+                                    <option value="Clinton, NC">Clinton, NC</option>
+                                    <option value="Concord, NC">Concord, NC</option>
+                                    <option value="Cornelius, NC">Cornelius, NC</option>
+                                    <option value="Davidson, NC">Davidson, NC</option>
+                                    <option value="Dunn, NC">Dunn, NC</option>
+                                    <option value="Durham, NC">Durham, NC</option>
+                                    <option value="Eden, NC">Eden, NC</option>
+                                    <option value="Elizabeth City, NC">Elizabeth City, NC</option>
+                                    <option value="Elizabethtown, NC">Elizabethtown, NC</option>
+                                    <option value="Elon, NC">Elon, NC</option>
+                                    <option value="Fayetteville, NC">Fayetteville, NC</option>
+                                    <option value="Fuquay-Varina, NC">Fuquay-Varina, NC</option>
+                                    <option value="Garner, NC">Garner, NC</option>
+                                    <option value="Gastonia, NC">Gastonia, NC</option>
+                                    <option value="Goldsboro, NC">Goldsboro, NC</option>
+                                    <option value="Graham, NC">Graham, NC</option>
+                                    <option value="Greensboro, NC">Greensboro, NC</option>
+                                    <option value="Greenville, NC">Greenville, NC</option>
+                                    <option value="Harrisburg, NC">Harrisburg, NC</option>
+                                    <option value="Henderson, NC">Henderson, NC</option>
+                                    <option value="Hendersonville, NC">Hendersonville, NC</option>
+                                    <option value="Hickory, NC">Hickory, NC</option>
+                                    <option value="High Point, NC">High Point, NC</option>
+                                    <option value="Holly Springs, NC">Holly Springs, NC</option>
+                                    <option value="Hope Mills, NC">Hope Mills, NC</option>
+                                    <option value="Huntersville, NC">Huntersville, NC</option>
+                                    <option value="Indian Trail, NC">Indian Trail, NC</option>
+                                    <option value="Jacksonville, NC">Jacksonville, NC</option>
+                                    <option value="Kannapolis, NC">Kannapolis, NC</option>
+                                    <option value="Kernersville, NC">Kernersville, NC</option>
+                                    <option value="Kings Mountain, NC">Kings Mountain, NC</option>
+                                    <option value="Kinston, NC">Kinston, NC</option>
+                                    <option value="Knightdale, NC">Knightdale, NC</option>
+                                    <option value="Laurinburg, NC">Laurinburg, NC</option>
+                                    <option value="Leland, NC">Leland, NC</option>
+                                    <option value="Lenoir, NC">Lenoir, NC</option>
+                                    <option value="Lewisville, NC">Lewisville, NC</option>
+                                    <option value="Lexington, NC">Lexington, NC</option>
+                                    <option value="Lillington, NC">Lillington, NC</option>
+                                    <option value="Lincolnton, NC">Lincolnton, NC</option>
+                                    <option value="Lumberton, NC">Lumberton, NC</option>
+                                    <option value="Marion, NC">Marion, NC</option>
+                                    <option value="Matthews, NC">Matthews, NC</option>
+                                    <option value="Mebane, NC">Mebane, NC</option>
+                                    <option value="Mint Hill, NC">Mint Hill, NC</option>
+                                    <option value="Monroe, NC">Monroe, NC</option>
+                                    <option value="Mooresville, NC">Mooresville, NC</option>
+                                    <option value="Morehead City, NC">Morehead City, NC</option>
+                                    <option value="Morganton, NC">Morganton, NC</option>
+                                    <option value="Morrisville, NC">Morrisville, NC</option>
+                                    <option value="Mount Airy, NC">Mount Airy, NC</option>
+                                    <option value="Mount Holly, NC">Mount Holly, NC</option>
+                                    <option value="Murfreesboro, NC">Murfreesboro, NC</option>
+                                    <option value="New Bern, NC">New Bern, NC</option>
+                                    <option value="Newton, NC">Newton, NC</option>
+                                    <option value="Oxford, NC">Oxford, NC</option>
+                                    <option value="Pinehurst, NC">Pinehurst, NC</option>
+                                    <option value="Pineville, NC">Pineville, NC</option>
+                                    <option value="Pittsboro, NC">Pittsboro, NC</option>
+                                    <option value="Raleigh, NC">Raleigh, NC</option>
+                                    <option value="Roanoke Rapids, NC">Roanoke Rapids, NC</option>
+                                    <option value="Rockingham, NC">Rockingham, NC</option>
+                                    <option value="Rocky Mount, NC">Rocky Mount, NC</option>
+                                    <option value="Rolesville, NC">Rolesville, NC</option>
+                                    <option value="Roxboro, NC">Roxboro, NC</option>
+                                    <option value="Salisbury, NC">Salisbury, NC</option>
+                                    <option value="Sanford, NC">Sanford, NC</option>
+                                    <option value="Selma, NC">Selma, NC</option>
+                                    <option value="Shelby, NC">Shelby, NC</option>
+                                    <option value="Siler City, NC">Siler City, NC</option>
+                                    <option value="Smithfield, NC">Smithfield, NC</option>
+                                    <option value="Southern Pines, NC">Southern Pines, NC</option>
+                                    <option value="Southport, NC">Southport, NC</option>
+                                    <option value="Spring Lake, NC">Spring Lake, NC</option>
+                                    <option value="Stallings, NC">Stallings, NC</option>
+                                    <option value="Statesville, NC">Statesville, NC</option>
+                                    <option value="Tarboro, NC">Tarboro, NC</option>
+                                    <option value="Thomasville, NC">Thomasville, NC</option>
+                                    <option value="Wake Forest, NC">Wake Forest, NC</option>
+                                    <option value="Waxhaw, NC">Waxhaw, NC</option>
+                                    <option value="Waynesville, NC">Waynesville, NC</option>
+                                    <option value="Wendell, NC">Wendell, NC</option>
+                                    <option value="Whiteville, NC">Whiteville, NC</option>
+                                    <option value="Williamston, NC">Williamston, NC</option>
+                                    <option value="Wilmington, NC">Wilmington, NC</option>
+                                    <option value="Wilson, NC">Wilson, NC</option>
+                                    <option value="Winston-Salem, NC">Winston-Salem, NC</option>
+                                    <option value="Winterville, NC">Winterville, NC</option>
+                                    <option value="Zebulon, NC">Zebulon, NC</option>
+                                    <option value="custom">Other / Custom...</option>
+                                </select>
+                                <input type="text" id="gl-location-custom" placeholder="Enter city, state or ZIP" class="hidden" style="margin-top:0.5rem">
+                            </div>
+                            <div class="gl-checkbox-wrap">
+                                <label class="checkbox-inline">
+                                    <input type="checkbox" id="gl-verify" checked>
+                                    <span>Verify Emails</span>
+                                </label>
+                            </div>
+                            <button class="primary-btn" id="gl-search-btn">
+                                <span class="btn-text">Search</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Deep Discovery Panel -->
+                    <div id="gl-discovery-panel" class="gl-form-panel hidden">
+                        <div class="gl-form-row">
+                            <div class="input-group">
+                                <label>Discovery Mode</label>
+                                <select id="gl-disc-mode">
+                                    <option value="category">By Category (scans all nearby cities)</option>
+                                    <option value="location">By Location (scans all categories)</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label id="gl-disc-label">Category</label>
+                                <input type="text" id="gl-disc-value" placeholder="e.g. IT Services">
+                            </div>
+                            <button class="primary-btn" id="gl-disc-btn">
+                                <span class="btn-text">Launch Discovery</span>
+                            </button>
+                        </div>
+                        <p class="gl-hint">Deep Discovery scans multiple cities and categories. This may take several minutes.</p>
+                    </div>
+                </div>
+
+                <!-- Progress indicator -->
+                <div id="gl-status" class="gl-status hidden">
+                    <div class="gl-spinner"></div>
+                    <span id="gl-status-text">Searching...</span>
+                </div>
+
+                <!-- Results Section -->
+                <div id="gl-results-section" class="hidden">
+                    <div class="gl-results-toolbar">
+                        <div class="gl-results-left">
+                            <strong id="gl-results-count">0 leads found</strong>
+                            <span class="gl-divider">|</span>
+                            <button class="link-btn" id="gl-select-all">Select All</button>
+                            <button class="link-btn" id="gl-deselect-all">Deselect All</button>
+                        </div>
+                        <div class="gl-results-right">
+                            <span class="gl-selected-label" id="gl-selected-count"></span>
+                            <button class="export-btn" id="gl-export-pdf" disabled>📄 Export PDF</button>
+                            <button class="export-btn sheets-btn" id="gl-export-sheets" disabled>📊 Export to Sheets</button>
+                        </div>
+                    </div>
+                    <div id="gl-results-grid" class="gl-results-grid"></div>
+                </div>
+
+                <!-- Recent Search History -->
+                <div class="gl-history-section">
+                    <h4 class="gl-history-title">Recent Searches</h4>
+                    <div id="gl-history-list" class="gl-history-list">
+                        <p class="empty-note">No recent searches.</p>
+                    </div>
+                </div>
+
+            </div>
+            <!-- end generate-tab -->
+
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

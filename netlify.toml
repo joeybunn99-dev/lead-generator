@@ -1,0 +1,26 @@
+[build]
+  command   = "npm install"
+  publish   = "public"
+  functions = "netlify/functions"
+
+[functions]
+  # sqlite3 is a native module — keep it external so esbuild doesn't try to bundle the .node file
+  external_node_modules = ["sqlite3"]
+  node_bundler           = "esbuild"
+
+# Increase function timeout to 26 seconds (maximum on Netlify paid / Pro)
+# Free tier is capped at 10s — scraping is disabled on Netlify so searches are fast
+[functions."api"]
+  timeout = 26
+
+# Route all /api/* requests to the serverless Express function
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/api/:splat"
+  status = 200
+
+# SPA fallback — serve index.html for any unmatched path
+[[redirects]]
+  from   = "/*"
+  to     = "/app.html"
+  status = 200
