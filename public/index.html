@@ -376,54 +376,28 @@
         <!-- Enrich Contacts -->
         <div class="glass-strong rounded-xl p-5">
             <h2 class="text-base font-bold text-white mb-1">Enrich Contacts</h2>
-            <p class="text-xs text-gray-500 mb-4">Find contact details by scraping company websites and searching Apollo.</p>
+            <p class="text-xs text-gray-500 mb-4">Find contact details by scraping company websites with AI (Firecrawl).</p>
             <div class="border-t border-white/[0.06] pt-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Scrape Websites -->
-                    <div>
-                        <h3 class="text-sm font-semibold text-white mb-1">Step 1 &mdash; Scrape Websites</h3>
-                        <p class="text-xs text-gray-500 mb-3">Extract contacts from company websites.</p>
-                        <div class="flex items-center gap-3">
-                            <button id="scrape-btn" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-white/10 hover:bg-white/5 transition-colors">
-                                Scrape Websites
-                            </button>
-                            <button id="scrape-cancel-btn" class="hidden px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm font-medium border border-red-500/30 hover:bg-red-500/30 transition-colors">
-                                Stop
-                            </button>
-                        </div>
-                        <div id="scrape-progress" class="hidden mt-3">
-                            <div class="flex justify-between text-xs text-gray-500 mb-1.5">
-                                <span id="scrape-status-text">Running...</span>
-                                <span id="scrape-pct">0%</span>
-                            </div>
-                            <div class="h-2 rounded-full bg-surface-950 overflow-hidden">
-                                <div id="scrape-bar" class="progress-bar h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style="width:0%"></div>
-                            </div>
-                            <div id="scrape-stats" class="text-xs text-gray-600 mt-1.5"></div>
-                        </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-white mb-1">Scrape Websites</h3>
+                    <p class="text-xs text-gray-500 mb-3">AI-powered extraction of emails, phones, and decision makers from company websites.</p>
+                    <div class="flex items-center gap-3">
+                        <button id="scrape-btn" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-white/10 hover:bg-white/5 transition-colors">
+                            Scrape Websites
+                        </button>
+                        <button id="scrape-cancel-btn" class="hidden px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm font-medium border border-red-500/30 hover:bg-red-500/30 transition-colors">
+                            Stop
+                        </button>
                     </div>
-                    <!-- Apollo Lookup -->
-                    <div>
-                        <h3 class="text-sm font-semibold text-white mb-1">Step 2 &mdash; Apollo Lookup</h3>
-                        <p class="text-xs text-gray-500 mb-3">Search Apollo.io for verified contacts.</p>
-                        <div class="flex items-center gap-3">
-                            <button id="apollo-btn" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-white/10 hover:bg-white/5 transition-colors">
-                                Apollo Lookup
-                            </button>
-                            <button id="apollo-cancel-btn" class="hidden px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm font-medium border border-red-500/30 hover:bg-red-500/30 transition-colors">
-                                Stop
-                            </button>
+                    <div id="scrape-progress" class="hidden mt-3">
+                        <div class="flex justify-between text-xs text-gray-500 mb-1.5">
+                            <span id="scrape-status-text">Running...</span>
+                            <span id="scrape-pct">0%</span>
                         </div>
-                        <div id="apollo-progress" class="hidden mt-3">
-                            <div class="flex justify-between text-xs text-gray-500 mb-1.5">
-                                <span id="apollo-status-text">Running...</span>
-                                <span id="apollo-pct">0%</span>
-                            </div>
-                            <div class="h-2 rounded-full bg-surface-950 overflow-hidden">
-                                <div id="apollo-bar" class="progress-bar h-2 rounded-full bg-gradient-to-r from-violet-500 to-purple-500" style="width:0%"></div>
-                            </div>
-                            <div id="apollo-stats" class="text-xs text-gray-600 mt-1.5"></div>
+                        <div class="h-2 rounded-full bg-surface-950 overflow-hidden">
+                            <div id="scrape-bar" class="progress-bar h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style="width:0%"></div>
                         </div>
+                        <div id="scrape-stats" class="text-xs text-gray-600 mt-1.5"></div>
                     </div>
                 </div>
             </div>
