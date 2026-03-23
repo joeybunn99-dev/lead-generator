@@ -1,696 +1,805 @@
 document.addEventListener('DOMContentLoaded', () => {
-    if (!document.getElementById('dashboard-tab')) return;
 
-    // ══════════════════════════════════════
-    // LOGIN
-    // ══════════════════════════════════════
+    // ── Utilities ──────────────────────────────────────────────────────────────
+    function escHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function api(url, opts = {}) {
+        return fetch(url, { credentials: 'include', ...opts });
+    }
+
+    function apiJson(url, opts = {}) {
+        return api(url, {
+            headers: { 'Content-Type': 'application/json', ...opts.headers },
+            ...opts,
+        }).then(r => r.json());
+    }
+
+    // ── Auth ────────────────────────────────────────────────────────────────────
     const loginOverlay = document.getElementById('login-overlay');
 
-    if (sessionStorage.getItem('auth_token')) {
-        if (loginOverlay) loginOverlay.style.display = 'none';
-    }
-
-    document.getElementById('login-form')?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const user = document.getElementById('login-user').value;
-        const pass = document.getElementById('login-pass').value;
-        if (user === 'admin' && pass === 'password') {
-            sessionStorage.setItem('auth_token', 'valid');
-            if (loginOverlay) loginOverlay.style.display = 'none';
-        } else {
-            alert('Invalid credentials. Try admin / password');
-        }
-    });
-
-    document.getElementById('logout-btn')?.addEventListener('click', () => {
-        sessionStorage.removeItem('auth_token');
-        if (loginOverlay) loginOverlay.style.display = 'flex';
-    });
-
-    // ── Admin Settings Modal ──────────────────────────────
-    const settingsModal = document.getElementById('settings-modal');
-
-    function openSettings() {
-        // Pre-fill Apollo key from localStorage
-        const saved = localStorage.getItem('apollo_api_key') || '';
-        const keyInput = document.getElementById('settings-apollo-key');
-        if (keyInput) keyInput.value = saved;
-        document.getElementById('logo-upload-status').textContent = '';
-        settingsModal.style.display = 'flex';
-    }
-    function closeSettings() {
-        settingsModal.style.display = 'none';
-    }
-
-    document.getElementById('admin-settings-btn')?.addEventListener('click', openSettings);
-    document.getElementById('settings-close-btn')?.addEventListener('click', closeSettings);
-    document.getElementById('settings-cancel-btn')?.addEventListener('click', closeSettings);
-
-    // Close on backdrop click
-    settingsModal?.addEventListener('click', e => {
-        if (e.target === settingsModal) closeSettings();
-    });
-
-    // Logo upload via modal
-    document.getElementById('settings-logo-btn')?.addEventListener('click', () => {
-        document.getElementById('logo-upload').click();
-    });
-
-    document.getElementById('logo-upload')?.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const statusEl = document.getElementById('logo-upload-status');
-        statusEl.textContent = 'Uploading…';
-        await fetch('/api/settings/logo', { method: 'POST', body: file });
-        document.querySelectorAll('.brand-logo, .login-logo').forEach(img => {
-            img.src = '/logo.webp?' + Date.now();
-        });
-        statusEl.textContent = 'Logo updated!';
-    });
-
-    // Save settings (Apollo key)
-    document.getElementById('settings-save-btn')?.addEventListener('click', () => {
-        const key = document.getElementById('settings-apollo-key').value.trim();
-        if (key) {
-            localStorage.setItem('apollo_api_key', key);
-            // Also update the dashboard enrichment input if visible
-            const dashInput = document.getElementById('apollo-key-input');
-            if (dashInput) dashInput.value = key;
-        }
-        closeSettings();
-    });
-
-    // ══════════════════════════════════════
-    // TAB SWITCHING
-    // ══════════════════════════════════════
-    const PAGE_META = {
-        dashboard: ['Lead Generation Engine', 'Identify, verify, and close B2B prospects.'],
-        generate:  ['Generate Leads', 'Find and qualify new B2B prospects for your pipeline.'],
-    };
-
-    window.switchTab = (tab) => {
-        document.querySelectorAll('.tab-content').forEach(t => {
-            t.classList.add('hidden');
-            t.classList.remove('active');
-        });
-        document.querySelectorAll('.nav-item[data-tab]').forEach(n => n.classList.remove('active'));
-
-        const activeTab = document.getElementById(`${tab}-tab`);
-        if (activeTab) {
-            activeTab.classList.remove('hidden');
-            activeTab.classList.add('active');
-        }
-
-        const activeNav = document.querySelector(`.nav-item[data-tab="${tab}"]`);
-        if (activeNav) activeNav.classList.add('active');
-
-        if (PAGE_META[tab]) {
-            document.getElementById('page-title').textContent = PAGE_META[tab][0];
-            document.getElementById('page-subtitle').textContent = PAGE_META[tab][1];
-        }
-
-        if (tab === 'dashboard') fetchLeads();
-        if (tab === 'generate') fetchSearchHistory();
-    };
-
-    // ══════════════════════════════════════
-    // DASHBOARD
-    // ══════════════════════════════════════
-    const tableBody        = document.getElementById('leads-table-body');
-    const exportBtn        = document.getElementById('export-btn');
-    const cityFilter       = document.getElementById('city-filter');
-    const scoreFilter      = document.getElementById('score-filter');
-    const statusFilter     = document.getElementById('status-filter');
-    const searchFilter     = document.getElementById('search-filter');
-    const hideContacted    = document.getElementById('hide-contacted');
-    const prevPageBtn      = document.getElementById('prev-page');
-    const nextPageBtn      = document.getElementById('next-page');
-    const pageInfo         = document.getElementById('page-info');
-    const itemsPerPage     = document.getElementById('items-per-page');
-
-    const dash = {
-        leads: [],
-        filtered: [],
-        filters: { search: '', city: '', score: 60, status: '', hideContacted: false },
-        page: 1,
-        perPage: 10,
-        sort: { field: 'score', dir: 'desc' }
-    };
-
-    fetchLeads();
-
-    searchFilter.addEventListener('input',  e => { dash.filters.search = e.target.value.toLowerCase(); applyFilters(); });
-    cityFilter.addEventListener('change',   e => { dash.filters.city = e.target.value; applyFilters(); });
-    scoreFilter.addEventListener('change',  e => { dash.filters.score = parseInt(e.target.value); applyFilters(); });
-    statusFilter.addEventListener('change', e => { dash.filters.status = e.target.value; applyFilters(); });
-    hideContacted.addEventListener('change',e => { dash.filters.hideContacted = e.target.checked; applyFilters(); });
-    prevPageBtn.addEventListener('click',   () => { if (dash.page > 1) { dash.page--; renderDash(); } });
-    nextPageBtn.addEventListener('click',   () => {
-        const max = Math.ceil(dash.filtered.length / dash.perPage);
-        if (dash.page < max) { dash.page++; renderDash(); }
-    });
-    itemsPerPage.addEventListener('change', e => { dash.perPage = parseInt(e.target.value); dash.page = 1; renderDash(); });
-    exportBtn.addEventListener('click', () => { window.location.href = '/api/export'; });
-
-    window.sortBy = (field) => {
-        dash.sort.dir = (dash.sort.field === field && dash.sort.dir === 'desc') ? 'asc' : 'desc';
-        dash.sort.field = field;
-        applyFilters();
-    };
-
-    window.toggleContacted = async (id, current) => {
-        const newVal = !current;
-        const lead = dash.leads.find(l => l.id === id);
-        if (lead) lead.contacted = newVal;
-        applyFilters();
+    async function checkAuth() {
         try {
-            await fetch(`/api/${id}/contacted`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contacted: newVal })
-            });
-        } catch { fetchLeads(); }
-    };
-
-    async function fetchLeads() {
-        try {
-            const res = await fetch('/api/');
-            dash.leads = await res.json();
-            const cities = [...new Set(dash.leads.map(l => l.city).filter(Boolean))].sort();
-            cityFilter.innerHTML = '<option value="">All Cities</option>' +
-                cities.map(c => `<option value="${c}">${c}</option>`).join('');
-            applyFilters();
-        } catch (e) { console.error('fetchLeads:', e); }
-    }
-
-    function applyFilters() {
-        const { search, city, score, status, hideContacted: hc } = dash.filters;
-        dash.filtered = dash.leads.filter(l => {
-            if (search && !`${l.business_name} ${l.city}`.toLowerCase().includes(search)) return false;
-            if (city   && l.city !== city) return false;
-            if ((l.lead_score || 0) < score) return false;
-            if (status && l.verification_status !== status) return false;
-            if (hc && l.contacted) return false;
+            const res = await api('/api/stats');
+            if (res.status === 401) {
+                loginOverlay.style.display = 'flex';
+                return false;
+            }
+            loginOverlay.style.display = 'none';
             return true;
-        });
-        dash.filtered.sort((a, b) => {
-            const va = dash.sort.field === 'score' ? (a.lead_score || 0) : a[dash.sort.field];
-            const vb = dash.sort.field === 'score' ? (b.lead_score || 0) : b[dash.sort.field];
-            if (va < vb) return dash.sort.dir === 'asc' ? -1 : 1;
-            if (va > vb) return dash.sort.dir === 'asc' ?  1 : -1;
-            return 0;
-        });
-        const max = Math.ceil(dash.filtered.length / dash.perPage) || 1;
-        if (dash.page > max) dash.page = 1;
-        updateStats();
-        renderDash();
-    }
-
-    function updateStats() {
-        document.getElementById('total-leads').textContent    = dash.leads.length;
-        document.getElementById('verified-emails').textContent = dash.leads.filter(l => l.verified_email).length;
-        document.getElementById('contacted-count').textContent = dash.leads.filter(l => l.contacted).length;
-        exportBtn.disabled = dash.leads.length === 0;
-    }
-
-    function renderDash() {
-        const start    = (dash.page - 1) * dash.perPage;
-        const paginated = dash.filtered.slice(start, start + dash.perPage);
-        const maxPage  = Math.ceil(dash.filtered.length / dash.perPage) || 1;
-
-        pageInfo.textContent   = `Page ${dash.page} of ${maxPage}`;
-        prevPageBtn.disabled   = dash.page === 1;
-        nextPageBtn.disabled   = dash.page >= maxPage;
-
-        if (dash.filtered.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="8" class="empty-state">No leads match your filters.</td></tr>';
-            return;
+        } catch {
+            loginOverlay.style.display = 'flex';
+            return false;
         }
-
-        tableBody.innerHTML = paginated.map(lead => {
-            const score = lead.lead_score || 0;
-            const scoreColor = score >= 80 ? 'var(--success)' : score >= 60 ? '#d97706' : 'var(--danger)';
-            let hostname = lead.website || '--';
-            try { hostname = new URL(lead.website).hostname; } catch {}
-            const contact = lead.contact_name || tryParseFirst(lead.people) || '--';
-            const title   = lead.job_title || '--';
-            const email   = lead.best_email || (lead.email ? lead.email.split(',')[0] : null);
-            const vs      = lead.verification_status;
-            const badge   = vs === 'Valid'  ? '<span class="badge-valid">VALID</span>'
-                          : vs === 'Risky'  ? '<span class="badge-risky">RISKY</span>'
-                          : '';
-            return `
-            <tr class="${lead.contacted ? 'contacted-row' : ''}">
-                <td><strong style="color:${scoreColor}">${score}</strong></td>
-                <td>
-                    <strong>${lead.business_name}</strong><br>
-                    <a href="${lead.website}" target="_blank" class="muted-link">${hostname}</a>
-                </td>
-                <td>${contact}</td>
-                <td>${title}</td>
-                <td>${email ? `<div>${email}<br>${badge}</div>` : '<span class="text-muted">--</span>'}</td>
-                <td><span class="text-muted" style="font-size:0.82rem">${vs || 'Unverified'}</span></td>
-                <td>${lead.city || '--'}</td>
-                <td>
-                    <button class="action-btn" onclick="window.toggleContacted(${lead.id}, ${!!lead.contacted})">
-                        ${lead.contacted ? '↩ Undo' : '✓ Contact'}
-                    </button>
-                </td>
-            </tr>`;
-        }).join('');
     }
 
-    function tryParseFirst(json) {
-        try { return JSON.parse(json)?.[0] || null; } catch { return null; }
-    }
+    async function doLogin() {
+        const u = document.getElementById('login-user').value.trim();
+        const p = document.getElementById('login-pass').value;
+        const errEl = document.getElementById('login-error');
+        errEl.classList.add('hidden');
 
-    // ══════════════════════════════════════
-    // BULK IMPORT
-    // ══════════════════════════════════════
-    let bulkPollTimer = null;
-
-    document.getElementById('bulk-import-btn')?.addEventListener('click', async () => {
-        if (!confirm('This will scan all 105 NC cities via Google Maps and may take 5–10 minutes. Start?')) return;
-        await fetch('/api/bulk-import', { method: 'POST' });
-        startBulkPoll();
-    });
-
-    function startBulkPoll() {
-        document.getElementById('bulk-progress-wrap').classList.remove('hidden');
-        document.getElementById('bulk-import-btn').disabled = true;
-        document.getElementById('bulk-import-btn').textContent = '⏳ Importing…';
-        bulkPollTimer = setInterval(async () => {
-            try {
-                const res  = await fetch('/api/bulk-import/status');
-                const s    = await res.json();
-                const pct  = s.total ? Math.round((s.done / s.total) * 100) : 0;
-                document.getElementById('bulk-progress-bar').style.width = pct + '%';
-                document.getElementById('bulk-status-text').textContent =
-                    s.running ? `Scanning city ${s.done} of ${s.total}…` : `Complete — ${s.added} businesses added`;
-                document.getElementById('bulk-counts').textContent =
-                    `+${s.added} new · ${s.skipped} existing`;
-                if (!s.running) {
-                    clearInterval(bulkPollTimer);
-                    document.getElementById('bulk-import-btn').disabled = false;
-                    document.getElementById('bulk-import-btn').textContent = '⬇ Import All NC Cities';
-                    fetchLeads();
-                }
-            } catch { clearInterval(bulkPollTimer); }
-        }, 1500);
-    }
-
-    // Resume poll if import was running when page loaded
-    (async () => {
         try {
-            const res = await fetch('/api/bulk-import/status');
-            const s   = await res.json();
-            if (s.running) startBulkPoll();
-        } catch {}
-    })();
-
-    // ══════════════════════════════════════
-    // APOLLO ENRICHMENT
-    // ══════════════════════════════════════
-    let apolloPollTimer = null;
-
-    // Restore saved API key from previous session
-    const savedApolloKey = localStorage.getItem('apollo_api_key');
-    if (savedApolloKey) {
-        const inp = document.getElementById('apollo-key-input');
-        if (inp) inp.value = savedApolloKey;
-    }
-
-    document.getElementById('apollo-enrich-btn')?.addEventListener('click', async () => {
-        const key = document.getElementById('apollo-key-input').value.trim();
-        if (!key) { alert('Please paste your Apollo.io API key first.'); return; }
-        localStorage.setItem('apollo_api_key', key);
-
-        if (!confirm('This will scan all leads that have a website but no contact name and look up decision makers via Apollo.io. Continue?')) return;
-
-        const res  = await fetch('/api/enrich', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apolloKey: key })
-        });
-        const data = await res.json();
-        if (data.error)   { alert('Error: ' + data.error); return; }
-        if (data.message === 'No leads need enrichment') {
-            alert('All leads with websites already have contact info!');
-            return;
-        }
-        startApolloEnrichPoll();
-    });
-
-    function startApolloEnrichPoll() {
-        document.getElementById('apollo-progress-wrap').classList.remove('hidden');
-        document.getElementById('apollo-enrich-btn').disabled = true;
-        document.getElementById('apollo-enrich-btn').textContent = '⏳ Enriching…';
-
-        apolloPollTimer = setInterval(async () => {
-            try {
-                const res = await fetch('/api/enrich/status');
-                const s   = await res.json();
-                const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
-                document.getElementById('apollo-progress-bar').style.width = pct + '%';
-                document.getElementById('apollo-status-text').textContent =
-                    s.running
-                        ? `Processing lead ${s.done} of ${s.total}…`
-                        : `Complete — ${s.enriched} contacts found`;
-                document.getElementById('apollo-counts').textContent =
-                    `+${s.enriched} enriched · ${s.skipped} skipped`;
-                if (!s.running) {
-                    clearInterval(apolloPollTimer);
-                    document.getElementById('apollo-enrich-btn').disabled = false;
-                    document.getElementById('apollo-enrich-btn').textContent = '✨ Enrich Contacts';
-                    fetchLeads();
-                }
-            } catch { clearInterval(apolloPollTimer); }
-        }, 1500);
-    }
-
-    // Resume poll if enrichment was already running when page loaded
-    (async () => {
-        try {
-            const res = await fetch('/api/enrich/status');
-            const s   = await res.json();
-            if (s.running) startApolloEnrichPoll();
-        } catch {}
-    })();
-
-    // ══════════════════════════════════════
-    // GENERATE LEADS
-    // ══════════════════════════════════════
-    const gl = {
-        results: [],
-        selected: new Set(),
-        busy: false,
-        mode: 'quick'
-    };
-
-    // Mode toggle
-    document.getElementById('gl-mode-quick').addEventListener('click', () => setGLMode('quick'));
-    document.getElementById('gl-mode-discovery').addEventListener('click', () => setGLMode('discovery'));
-
-    function setGLMode(mode) {
-        gl.mode = mode;
-        document.getElementById('gl-mode-quick').classList.toggle('active', mode === 'quick');
-        document.getElementById('gl-mode-discovery').classList.toggle('active', mode === 'discovery');
-        document.getElementById('gl-quick-panel').classList.toggle('hidden', mode !== 'quick');
-        document.getElementById('gl-discovery-panel').classList.toggle('hidden', mode !== 'discovery');
-    }
-
-    // Custom location toggle
-    document.getElementById('gl-location-select')?.addEventListener('change', e => {
-        const custom = document.getElementById('gl-location-custom');
-        custom.classList.toggle('hidden', e.target.value !== 'custom');
-        if (e.target.value === 'custom') custom.focus();
-    });
-
-    document.getElementById('gl-disc-mode')?.addEventListener('change', e => {
-        const isLoc = e.target.value === 'location';
-        document.getElementById('gl-disc-label').textContent = isLoc ? 'Location (City, State or ZIP)' : 'Category';
-        const inp = document.getElementById('gl-disc-value');
-        inp.placeholder = isLoc ? 'e.g. Clayton NC, 27520  (comma-separate for multiple)' : 'e.g. IT Services';
-        inp.value = isLoc ? '' : 'IT Services';
-    });
-
-    // Quick Search
-    document.getElementById('gl-search-btn').addEventListener('click', async () => {
-        if (gl.busy) return;
-        const categorySelect = document.getElementById('gl-category');
-        const locationSelect = document.getElementById('gl-location-select');
-        const keyword  = categorySelect.value;
-        const location = locationSelect.value === 'custom'
-            ? document.getElementById('gl-location-custom').value.trim()
-            : locationSelect.value;
-        if (!location) { alert('Please select or enter a location.'); return; }
-        const verifyEmails = document.getElementById('gl-verify').checked;
-
-        const isLocalDB = false; // updated after fetch
-        setGLBusy(true, 'Searching…');
-        try {
-            const res  = await fetch('/api/search', {
+            const res = await api('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ keyword, location, verifyEmails })
+                body: JSON.stringify({ username: u, password: p }),
             });
-            const data = await res.json();
-            gl.results = data.data || [];
-            gl.searchMessage = data.message || '';
-            gl.selected = new Set(gl.results.map((_, i) => i));
-            renderGLResults();
-        } catch (e) {
-            console.error(e);
-            alert('Search failed. Check the console for details.');
-        } finally {
-            setGLBusy(false, '', 'Search');
+            if (res.ok) {
+                loginOverlay.style.display = 'none';
+                initApp();
+            } else {
+                errEl.classList.remove('hidden');
+            }
+        } catch {
+            errEl.textContent = 'Connection error.';
+            errEl.classList.remove('hidden');
         }
-    });
-
-    // Deep Discovery
-    document.getElementById('gl-disc-btn').addEventListener('click', async () => {
-        if (gl.busy) return;
-        const type  = document.getElementById('gl-disc-mode').value;
-        const value = document.getElementById('gl-disc-value').value.trim();
-        if (!value) { alert('Please enter a category or location.'); return; }
-
-        setGLBusy(true, 'Deep Discovery running — scanning multiple sources, please wait…');
-        try {
-            const res  = await fetch('/api/discovery', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, value })
-            });
-            const data = await res.json();
-            gl.results = data.data || [];
-            gl.selected = new Set(gl.results.map((_, i) => i));
-            renderGLResults();
-            fetchSearchHistory();
-        } catch (e) {
-            console.error(e);
-            alert('Discovery failed. Check the console for details.');
-        } finally {
-            setGLBusy(false, '', 'Launch Discovery');
-        }
-    });
-
-    function setGLBusy(busy, msg, resetLabel) {
-        gl.busy = busy;
-        document.getElementById('gl-status').classList.toggle('hidden', !busy);
-        if (msg) document.getElementById('gl-status-text').textContent = msg;
-        if (busy) document.getElementById('gl-results-section').classList.add('hidden');
-
-        const sb = document.getElementById('gl-search-btn');
-        const db = document.getElementById('gl-disc-btn');
-        if (sb) { sb.disabled = busy; if (!busy && resetLabel) sb.querySelector('.btn-text').textContent = resetLabel; }
-        if (db) { db.disabled = busy; if (!busy && resetLabel) db.querySelector('.btn-text').textContent = resetLabel; }
     }
 
-    function renderGLResults() {
-        const section   = document.getElementById('gl-results-section');
-        const grid      = document.getElementById('gl-results-grid');
-        const countEl   = document.getElementById('gl-results-count');
+    document.getElementById('login-btn').addEventListener('click', doLogin);
+    document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    document.getElementById('login-user').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
-        const fromDB = gl.searchMessage && gl.searchMessage.includes('local database');
-        const sourceLabel = fromDB ? ' (from local database)' : '';
-        countEl.textContent = `${gl.results.length} lead${gl.results.length !== 1 ? 's' : ''} found${sourceLabel}`;
-        section.classList.remove('hidden');
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+        await api('/api/logout', { method: 'POST' });
+        loginOverlay.style.display = 'flex';
+    });
 
-        if (gl.results.length === 0) {
-            grid.innerHTML = '<p class="empty-note" style="padding:2rem;text-align:center">No leads found. Try a different keyword or location.</p>';
-            updateGLExportBtns();
-            return;
-        }
-
-        grid.innerHTML = gl.results.map((lead, idx) => {
-            const score      = lead.lead_score || 0;
-            const scoreClass = score >= 80 ? 'high' : score >= 60 ? 'med' : 'low';
-            const sel        = gl.selected.has(idx);
-            let hostname     = lead.website || '';
-            try { hostname = new URL(lead.website).hostname; } catch {}
-            const email   = lead.best_email || (lead.email ? lead.email.split(',')[0] : null);
-            const verified = lead.verified_email;
-            const badge    = verified ? '<span class="badge-valid">VERIFIED</span>'
-                           : email    ? '<span class="badge-unverified">UNVERIFIED</span>' : '';
-
-            return `
-            <div class="lead-card${sel ? ' selected' : ''}" data-idx="${idx}" onclick="window.toggleLeadSelect(${idx})">
-                <div class="lead-card-top">
-                    <label class="lead-checkbox-wrap" onclick="event.stopPropagation()">
-                        <input type="checkbox" class="lead-checkbox" data-idx="${idx}" ${sel ? 'checked' : ''}
-                            onchange="window.toggleLeadSelect(${idx})">
-                    </label>
-                    <div class="score-badge score-${scoreClass}">${score}</div>
-                </div>
-                <div class="lead-card-body">
-                    <div class="lead-biz-name">${lead.business_name}</div>
-                    ${hostname ? `<a href="${lead.website}" target="_blank" class="lead-website" onclick="event.stopPropagation()">${hostname}</a>` : ''}
-                    <div class="lead-info-rows">
-                        ${lead.contact_name ? `
-                        <div class="lead-info-row">
-                            <span class="info-icon">👤</span>
-                            <span>${lead.contact_name}${lead.job_title ? ` · <em>${lead.job_title}</em>` : ''}</span>
-                        </div>` : ''}
-                        ${email ? `
-                        <div class="lead-info-row">
-                            <span class="info-icon">✉</span>
-                            <span>${email} ${badge}</span>
-                        </div>` : ''}
-                        ${lead.phone ? `
-                        <div class="lead-info-row">
-                            <span class="info-icon">📞</span>
-                            <span>${lead.phone}</span>
-                        </div>` : ''}
-                        ${lead.city ? `
-                        <div class="lead-info-row">
-                            <span class="info-icon">📍</span>
-                            <span>${lead.city}</span>
-                        </div>` : ''}
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-
-        updateGLExportBtns();
-    }
-
-    window.toggleLeadSelect = (idx) => {
-        if (gl.selected.has(idx)) {
-            gl.selected.delete(idx);
-        } else {
-            gl.selected.add(idx);
-        }
-        const card = document.querySelector(`.lead-card[data-idx="${idx}"]`);
-        const cb   = document.querySelector(`.lead-checkbox[data-idx="${idx}"]`);
-        if (card) card.classList.toggle('selected', gl.selected.has(idx));
-        if (cb)   cb.checked = gl.selected.has(idx);
-        updateGLExportBtns();
+    // ── Tab switching ───────────────────────────────────────────────────────────
+    const TABS = {
+        leads: { title: 'Leads', subtitle: 'Decision-maker contacts \u00b7 North Carolina statewide' },
+        companies: { title: 'Companies', subtitle: 'All companies found across North Carolina' },
+        import: { title: 'Import', subtitle: 'Pull companies and enrich contacts' },
+        'website-leads': { title: 'Website Leads', subtitle: 'Inbound leads from bunncom.com savings calculator' },
     };
 
-    document.getElementById('gl-select-all').addEventListener('click', () => {
-        gl.selected = new Set(gl.results.map((_, i) => i));
-        document.querySelectorAll('.lead-card').forEach(c => c.classList.add('selected'));
-        document.querySelectorAll('.lead-checkbox').forEach(cb => cb.checked = true);
-        updateGLExportBtns();
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => switchTab(item.dataset.tab));
     });
 
-    document.getElementById('gl-deselect-all').addEventListener('click', () => {
-        gl.selected.clear();
-        document.querySelectorAll('.lead-card').forEach(c => c.classList.remove('selected'));
-        document.querySelectorAll('.lead-checkbox').forEach(cb => cb.checked = false);
-        updateGLExportBtns();
-    });
-
-    function updateGLExportBtns() {
-        const n = gl.selected.size;
-        const label    = document.getElementById('gl-selected-count');
-        const pdfBtn   = document.getElementById('gl-export-pdf');
-        const csvBtn   = document.getElementById('gl-export-sheets');
-        label.textContent   = n > 0 ? `${n} selected` : '';
-        pdfBtn.disabled = csvBtn.disabled = n === 0;
+    function switchTab(tab) {
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === tab));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === `${tab}-tab`));
+        const info = TABS[tab] || { title: tab, subtitle: '' };
+        document.getElementById('page-title').textContent = info.title;
+        document.getElementById('page-subtitle').textContent = info.subtitle;
+        if (tab === 'leads') loadLeads();
+        if (tab === 'companies') loadCompanies();
+        if (tab === 'website-leads') loadWebsiteLeads();
     }
 
-    document.getElementById('gl-export-pdf').addEventListener('click', () => {
-        const leads = [...gl.selected].map(i => gl.results[i]);
-        exportToPDF(leads);
-    });
+    // ── Industry helpers ────────────────────────────────────────────────────────
+    const INDUSTRY_COLORS = {
+        'Technology/IT': '#6366f1', 'Construction': '#f59e0b',
+        'Manufacturing': '#10b981', 'Legal': '#3b82f6',
+        'Accounting': '#8b5cf6', 'Consulting': '#ec4899',
+        'Engineering': '#14b8a6', 'Marketing': '#f97316',
+        'Automotive': '#ef4444', 'Real Estate': '#06b6d4',
+    };
 
-    document.getElementById('gl-export-sheets').addEventListener('click', () => {
-        const leads = [...gl.selected].map(i => gl.results[i]);
-        exportToCSV(leads);
-    });
-
-    // ── PDF Export ──────────────────────────────────────
-    function exportToPDF(leads) {
-        const win = window.open('', '_blank');
-        win.document.write(`<!DOCTYPE html><html><head>
-            <title>Lead Export — Bunn Communications</title>
-            <style>
-                body{font-family:Arial,sans-serif;padding:28px;color:#172b4d}
-                h1{color:#0a192f;font-size:1.3rem;margin-bottom:4px}
-                .meta{color:#666;font-size:0.82rem;margin-bottom:22px}
-                table{width:100%;border-collapse:collapse;font-size:0.82rem}
-                th{background:#0a192f;color:#fff;padding:9px 10px;text-align:left;font-weight:600}
-                td{padding:7px 10px;border-bottom:1px solid #e0e4ea;vertical-align:top}
-                tr:nth-child(even) td{background:#f7f9fc}
-                .score-high{color:#36b37e;font-weight:700}
-                .score-med{color:#d97706;font-weight:700}
-                .score-low{color:#ff5630;font-weight:700}
-                small{color:#888}
-                @media print{@page{margin:.75in}}
-            </style>
-        </head><body>
-        <h1>Lead Export — Bunn Communications</h1>
-        <p class="meta">Generated: ${new Date().toLocaleDateString()} &nbsp;|&nbsp; ${leads.length} lead${leads.length !== 1 ? 's' : ''}</p>
-        <table>
-            <thead><tr>
-                <th>Score</th><th>Business</th><th>Contact</th>
-                <th>Email</th><th>Phone</th><th>City</th><th>Status</th>
-            </tr></thead>
-            <tbody>${leads.map(l => {
-                const s = l.lead_score || 0;
-                const cls = s >= 80 ? 'score-high' : s >= 60 ? 'score-med' : 'score-low';
-                const email = l.best_email || (l.email ? l.email.split(',')[0] : '');
-                return `<tr>
-                    <td class="${cls}">${s}</td>
-                    <td><strong>${l.business_name || ''}</strong><br><small>${l.website || ''}</small></td>
-                    <td>${l.contact_name || ''}${l.job_title ? '<br><small>' + l.job_title + '</small>' : ''}</td>
-                    <td>${email}</td>
-                    <td>${l.phone || ''}</td>
-                    <td>${l.city || ''}</td>
-                    <td>${l.verification_status || ''}</td>
-                </tr>`;
-            }).join('')}</tbody>
-        </table>
-        <script>setTimeout(()=>window.print(),400);<\/script>
-        </body></html>`);
-        win.document.close();
+    function industryDot(industry) {
+        const color = INDUSTRY_COLORS[industry] || '#64748b';
+        return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px;vertical-align:middle"></span>`;
     }
 
-    // ── CSV / Google Sheets Export ───────────────────────
-    function exportToCSV(leads) {
-        const headers = ['Score','Business Name','Contact','Job Title','Email','Phone','City','Website','Status'];
-        const rows = leads.map(l => [
-            l.lead_score || 0,
-            l.business_name || '',
-            l.contact_name  || '',
-            l.job_title     || '',
-            l.best_email || (l.email ? l.email.split(',')[0] : ''),
-            l.phone         || '',
-            l.city          || '',
-            l.website       || '',
-            l.verification_status || ''
-        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-
-        const csv  = [headers.join(','), ...rows].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href     = url;
-        a.download = `bunn-leads-${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    function ratingBadge(rating) {
+        if (!rating) return '<span class="text-gray-600">\u2014</span>';
+        const val = Number(rating).toFixed(1);
+        if (rating >= 4.5) return `<span class="score-badge bg-emerald-500/20 text-emerald-400">\u2605 ${val}</span>`;
+        if (rating >= 4.0) return `<span class="score-badge bg-yellow-500/20 text-yellow-400">\u2605 ${val}</span>`;
+        return `<span class="score-badge bg-gray-500/20 text-gray-400">\u2605 ${val}</span>`;
     }
 
-    // ── Search History ───────────────────────────────────
-    async function fetchSearchHistory() {
+    function scoreBadge(score) {
+        if (score == null || score === '') return '<span class="text-gray-600">\u2014</span>';
+        const s = Number(score);
+        if (s >= 80) return `<span class="score-badge bg-emerald-500/20 text-emerald-400">${s}</span>`;
+        if (s >= 50) return `<span class="score-badge bg-yellow-500/20 text-yellow-400">${s}</span>`;
+        return `<span class="score-badge bg-gray-500/20 text-gray-500">${s}</span>`;
+    }
+
+    function emailStatusDot(status) {
+        if (!status || status === 'unverified') return '<span class="email-dot" style="background:#64748b"></span>';
+        if (status === 'valid') return '<span class="email-dot" style="background:#22c55e"></span>';
+        if (status === 'risky') return '<span class="email-dot" style="background:#eab308"></span>';
+        if (status === 'invalid') return '<span class="email-dot" style="background:#ef4444"></span>';
+        return '<span class="email-dot" style="background:#64748b"></span>';
+    }
+
+    // ── Load industry + city options ────────────────────────────────────────────
+    async function loadIndustryOptions() {
         try {
-            const res     = await fetch('/api/history');
-            const history = await res.json();
-            const el      = document.getElementById('gl-history-list');
-            if (!el) return;
-            if (!history.length) {
-                el.innerHTML = '<p class="empty-note">No recent searches.</p>';
+            const industries = await apiJson('/api/industries');
+            ['leads-industry', 'co-industry'].forEach(id => {
+                const sel = document.getElementById(id);
+                // Keep first option, remove rest
+                while (sel.options.length > 1) sel.remove(1);
+                industries.forEach(ind => {
+                    const opt = document.createElement('option');
+                    opt.value = ind; opt.textContent = ind;
+                    sel.appendChild(opt);
+                });
+            });
+        } catch { /* ignore */ }
+    }
+
+    async function loadCityOptions() {
+        try {
+            const cities = await apiJson('/api/cities');
+            ['leads-city', 'co-city'].forEach(id => {
+                const sel = document.getElementById(id);
+                while (sel.options.length > 1) sel.remove(1);
+                cities.forEach(city => {
+                    const opt = document.createElement('option');
+                    opt.value = city; opt.textContent = city;
+                    sel.appendChild(opt);
+                });
+            });
+        } catch { /* ignore */ }
+    }
+
+    // ── Stats ───────────────────────────────────────────────────────────────────
+    async function loadStats() {
+        try {
+            const s = await apiJson('/api/stats');
+            document.getElementById('stat-contacts').textContent = s.totalContacts?.toLocaleString() ?? '0';
+            document.getElementById('stat-email').textContent = s.contactsWithEmail?.toLocaleString() ?? '0';
+            document.getElementById('stat-phone').textContent = s.contactsWithPhone?.toLocaleString() ?? '0';
+            document.getElementById('stat-companies').textContent = s.totalCompanies?.toLocaleString() ?? '0';
+        } catch { /* ignore */ }
+    }
+
+    // ── LEADS TAB ───────────────────────────────────────────────────────────────
+    let leadsPage = 1;
+
+    function getLeadsParams() {
+        const params = new URLSearchParams();
+        const search = document.getElementById('leads-search').value.trim();
+        const industry = document.getElementById('leads-industry').value;
+        const city = document.getElementById('leads-city').value;
+        if (search)   params.set('search', search);
+        if (industry) params.set('industry', industry);
+        if (city)     params.set('city', city);
+        if (document.getElementById('leads-has-email').checked)      params.set('hasEmail', 'true');
+        if (document.getElementById('leads-has-phone').checked)      params.set('hasPhone', 'true');
+        if (document.getElementById('leads-not-contacted').checked)  params.set('notContacted', 'true');
+        params.set('page', leadsPage);
+        params.set('limit', document.getElementById('leads-limit').value);
+        return params;
+    }
+
+    async function loadLeads() {
+        const tbody = document.getElementById('leads-tbody');
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-gray-600">Loading\u2026</td></tr>';
+        try {
+            const res = await api('/api/contacts?' + getLeadsParams());
+            if (res.status === 401) { loginOverlay.style.display = 'flex'; return; }
+            const { data, total, page, limit } = await res.json();
+
+            document.getElementById('leads-count').textContent = `${total.toLocaleString()} contact${total !== 1 ? 's' : ''}`;
+            const totalPages = Math.max(1, Math.ceil(total / limit));
+            document.getElementById('leads-page-info').textContent = `Page ${page} of ${totalPages}`;
+            document.getElementById('leads-prev').disabled = page <= 1;
+            document.getElementById('leads-next').disabled = page >= totalPages;
+
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-gray-600">No contacts match your filters.</td></tr>';
                 return;
             }
-            el.innerHTML = history.map(h => `
-                <div class="history-item">
-                    <span>${h.query_type === 'location' ? '📍' : '🏷️'} <strong>${h.query_value}</strong></span>
-                    <span class="history-meta">${new Date(h.timestamp).toLocaleDateString()} · ${h.leads_found} leads</span>
-                </div>`).join('');
-        } catch (e) { console.error('fetchSearchHistory:', e); }
+
+            tbody.innerHTML = data.map(c => {
+                const emailHtml = c.email
+                    ? `${emailStatusDot(c.email_status)}<a href="mailto:${escHtml(c.email)}" class="text-brand-400 hover:text-brand-500 no-underline">${escHtml(c.email)}</a>`
+                    : '<span class="text-gray-600">\u2014</span>';
+
+                const contactedBtn = c.contacted
+                    ? `<button type="button" class="px-2 py-1 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-pointer hover:bg-emerald-500/30" onclick="toggleContacted(${c.id}, false)">\u2713 Done</button>`
+                    : `<button type="button" class="px-2 py-1 rounded text-xs font-medium text-gray-400 border border-white/10 hover:bg-white/5 cursor-pointer" onclick="toggleContacted(${c.id}, true)">Mark Done</button>`;
+
+                return `<tr class="table-row border-b border-white/[0.04]">
+                    <td class="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                        <span class="font-semibold text-gray-200">${escHtml(c.company_name)}</span>
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-gray-300">${escHtml(c.name)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-gray-500 text-xs">${escHtml(c.title)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-xs">${emailHtml}</td>
+                    <td class="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-xs text-gray-400">${c.phone ? escHtml(c.phone) : '<span class="text-gray-600">\u2014</span>'}</td>
+                    <td class="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-xs text-gray-500">${escHtml(c.city || '')}</td>
+                    <td class="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-xs">${industryDot(c.industry)}${escHtml(c.industry || '')}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-center">${scoreBadge(c.lead_score)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-center">${ratingBadge(c.rating)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap">${contactedBtn}</td>
+                </tr>`;
+            }).join('');
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center py-8 text-red-400">Error loading contacts: ${escHtml(err.message)}</td></tr>`;
+        }
     }
+
+    window.toggleContacted = async (id, contacted) => {
+        await api(`/api/contacts/${id}/contacted`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contacted }),
+        });
+        loadLeads();
+        loadStats();
+    };
+
+    // Filter listeners
+    let leadsDebounce;
+    document.getElementById('leads-search').addEventListener('input', () => {
+        clearTimeout(leadsDebounce);
+        leadsDebounce = setTimeout(() => { leadsPage = 1; loadLeads(); }, 350);
+    });
+    ['leads-industry', 'leads-city', 'leads-limit'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => { leadsPage = 1; loadLeads(); });
+    });
+    ['leads-has-email', 'leads-has-phone', 'leads-not-contacted'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => { leadsPage = 1; loadLeads(); });
+    });
+
+    document.getElementById('leads-prev').addEventListener('click', () => { leadsPage--; loadLeads(); });
+    document.getElementById('leads-next').addEventListener('click', () => { leadsPage++; loadLeads(); });
+
+    document.getElementById('leads-export-btn').addEventListener('click', () => {
+        const params = getLeadsParams();
+        window.open('/api/contacts/export?' + params, '_blank');
+    });
+
+    // ── COMPANIES TAB ───────────────────────────────────────────────────────────
+    let coPage = 1;
+    const expandedRows = new Set();
+
+    async function loadCompanies() {
+        const tbody = document.getElementById('companies-tbody');
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-600">Loading\u2026</td></tr>';
+        try {
+            const params = new URLSearchParams();
+            const industry = document.getElementById('co-industry').value;
+            const city = document.getElementById('co-city').value.trim();
+            if (industry) params.set('industry', industry);
+            if (city)     params.set('city', city);
+            params.set('page', coPage);
+            params.set('limit', 50);
+
+            const res = await api('/api/companies?' + params);
+            const { data, total } = await res.json();
+
+            document.getElementById('co-count').textContent = `${total.toLocaleString()} companies`;
+            const totalPages = Math.max(1, Math.ceil(total / 50));
+            document.getElementById('co-page-info').textContent = `Page ${coPage} of ${totalPages}`;
+            document.getElementById('co-prev').disabled = coPage <= 1;
+            document.getElementById('co-next').disabled = coPage >= totalPages;
+
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-600">No companies found.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(c => {
+                let websiteHtml;
+                try {
+                    websiteHtml = c.website
+                        ? `<a href="${escHtml(c.website)}" target="_blank" class="text-brand-400 hover:text-brand-500 text-xs no-underline">${escHtml(new URL(c.website).hostname)}</a>`
+                        : '<span class="text-gray-600 text-xs">\u2014</span>';
+                } catch {
+                    websiteHtml = c.website
+                        ? `<a href="${escHtml(c.website)}" target="_blank" class="text-brand-400 hover:text-brand-500 text-xs no-underline">${escHtml(c.website)}</a>`
+                        : '<span class="text-gray-600 text-xs">\u2014</span>';
+                }
+
+                const hasContacts = c.contact_count > 0;
+                const contactBadge = hasContacts
+                    ? `<span class="score-badge bg-emerald-500/20 text-emerald-400">${c.contact_count}</span>`
+                    : `<span class="score-badge bg-gray-500/20 text-gray-600">${c.contact_count}</span>`;
+
+                return `<tr class="table-row border-b border-white/[0.04]">
+                    <td class="px-3 py-2" style="width:36px">
+                        ${hasContacts ? `<button type="button" class="px-1.5 py-0.5 rounded text-xs text-gray-500 border border-white/10 hover:bg-white/5 cursor-pointer" onclick="toggleExpand(${c.id}, this)">\u25b6</button>` : ''}
+                    </td>
+                    <td class="px-3 py-2 font-semibold text-gray-200">${escHtml(c.name)}</td>
+                    <td class="px-3 py-2 text-xs">${industryDot(c.industry)}${escHtml(c.industry || '')}</td>
+                    <td class="px-3 py-2 text-xs text-gray-500">${escHtml(c.city || '')}</td>
+                    <td class="px-3 py-2">${ratingBadge(c.rating)}</td>
+                    <td class="px-3 py-2">${contactBadge}</td>
+                    <td class="px-3 py-2">${websiteHtml}</td>
+                    <td class="px-3 py-2">
+                        <button type="button" class="px-2 py-1 rounded text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 cursor-pointer" onclick="deleteCompany(${c.id})">Delete</button>
+                    </td>
+                </tr>
+                <tr id="expand-${c.id}" style="display:none">
+                    <td colspan="8" class="px-6 py-3" style="background:rgba(255,255,255,0.02)">
+                        <em class="text-xs text-gray-600">Loading contacts\u2026</em>
+                    </td>
+                </tr>`;
+            }).join('');
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-red-400">Error: ${escHtml(err.message)}</td></tr>`;
+        }
+    }
+
+    window.toggleExpand = async (id, btn) => {
+        const row = document.getElementById(`expand-${id}`);
+        if (expandedRows.has(id)) {
+            row.style.display = 'none';
+            btn.textContent = '\u25b6';
+            expandedRows.delete(id);
+            return;
+        }
+        expandedRows.add(id);
+        btn.textContent = '\u25bc';
+        row.style.display = '';
+
+        const contacts = await apiJson(`/api/companies/${id}/contacts`);
+        const td = row.querySelector('td');
+
+        if (!contacts.length) {
+            td.innerHTML = '<em class="text-xs text-gray-600">No contacts found for this company.</em>';
+            return;
+        }
+        td.innerHTML = contacts.map(c =>
+            `<span class="inline-block border border-white/[0.06] rounded-lg px-3 py-1.5 text-xs m-0.5" style="background:rgba(255,255,255,0.03)">
+                <strong class="text-gray-300">${escHtml(c.name)}</strong>
+                <span class="text-gray-600">\u00b7</span> ${escHtml(c.title)}
+                ${c.email ? ` <span class="text-gray-600">\u00b7</span> <a href="mailto:${escHtml(c.email)}" class="text-brand-400">${escHtml(c.email)}</a>` : ''}
+                ${c.phone ? ` <span class="text-gray-600">\u00b7</span> ${escHtml(c.phone)}` : ''}
+            </span>`
+        ).join('');
+    };
+
+    window.deleteCompany = async (id) => {
+        if (!confirm('Delete this company and all its contacts?')) return;
+        await api(`/api/companies/${id}`, { method: 'DELETE' });
+        loadCompanies();
+        loadStats();
+    };
+
+    document.getElementById('co-industry').addEventListener('change', () => { coPage = 1; loadCompanies(); });
+    document.getElementById('co-city').addEventListener('change', () => { coPage = 1; loadCompanies(); });
+    document.getElementById('co-prev').addEventListener('click', () => { coPage--; loadCompanies(); });
+    document.getElementById('co-next').addEventListener('click', () => { coPage++; loadCompanies(); });
+
+    // ── IMPORT TAB ──────────────────────────────────────────────────────────────
+    let pullTimer = null, scrapeTimer = null, apolloTimer = null;
+    let currentPullSource = null;
+
+    // URL-to-Leads
+    document.getElementById('url-scrape-btn').addEventListener('click', async () => {
+        const url = document.getElementById('url-scrape-input').value.trim();
+        const resultEl = document.getElementById('url-scrape-result');
+        if (!url) { resultEl.textContent = 'Enter a URL first.'; resultEl.classList.remove('hidden'); return; }
+
+        const btn = document.getElementById('url-scrape-btn');
+        btn.disabled = true;
+        btn.textContent = 'Scraping\u2026';
+        resultEl.textContent = 'AI is analyzing the page\u2026';
+        resultEl.classList.remove('hidden');
+
+        try {
+            const res = await api('/api/enrich/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            resultEl.textContent = `Done! Found ${data.found || 0} contacts.`;
+            resultEl.className = 'text-xs text-emerald-400 mt-2';
+            loadStats();
+        } catch (err) {
+            resultEl.textContent = `Error: ${err.message}`;
+            resultEl.className = 'text-xs text-red-400 mt-2';
+        }
+        btn.disabled = false;
+        btn.textContent = 'Scrape with AI';
+    });
+
+    // Pull Companies
+    document.getElementById('pull-btn').addEventListener('click', async () => {
+        const checked = [...document.querySelectorAll('#industry-checks input:checked')].map(i => i.value);
+        if (!checked.length) { alert('Select at least one industry.'); return; }
+        const radius = parseInt(document.getElementById('pull-radius').value, 10);
+
+        document.getElementById('pull-btn').disabled = true;
+        document.getElementById('pull-cancel-btn').classList.remove('hidden');
+        document.getElementById('pull-cancel-btn').disabled = false;
+        document.getElementById('pull-cancel-btn').textContent = 'Stop';
+        document.getElementById('pull-progress').classList.remove('hidden');
+
+        runCombinedPull(checked, radius);
+    });
+
+    document.getElementById('pull-cancel-btn').addEventListener('click', async () => {
+        document.getElementById('pull-cancel-btn').disabled = true;
+        document.getElementById('pull-cancel-btn').textContent = 'Stopping\u2026';
+        if (currentPullSource === 'google')     await api('/api/pull/cancel', { method: 'POST' });
+        if (currentPullSource === 'foursquare') await api('/api/pull/foursquare/cancel', { method: 'POST' });
+        if (currentPullSource === 'osm')        await api('/api/pull/osm/cancel', { method: 'POST' });
+    });
+
+    async function runCombinedPull(industries, radius) {
+        let totalFound = 0;
+
+        // Phase 1 - Google Places (0-33%)
+        currentPullSource = 'google';
+        document.getElementById('pull-status-text').textContent = 'Google Places \u2014 Starting\u2026';
+        try {
+            await api('/api/pull', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ industries, radius }),
+            });
+        } catch { finishCombinedPull(totalFound, true); return; }
+        const googleResult = await pollSource('/api/pull/status', 'Google Places', 0, 33);
+        const gs = await apiJson('/api/pull/status');
+        totalFound += gs.companiesFound || 0;
+        if (googleResult === 'cancelled') { finishCombinedPull(totalFound, true); return; }
+
+        // Phase 2 - Foursquare (33-66%)
+        currentPullSource = 'foursquare';
+        document.getElementById('pull-status-text').textContent = 'Foursquare \u2014 Starting\u2026';
+        try {
+            await api('/api/pull/foursquare', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ industries, radius }),
+            });
+        } catch { finishCombinedPull(totalFound, true); return; }
+        const fsqResult = await pollSource('/api/pull/foursquare/status', 'Foursquare', 33, 66);
+        const fs = await apiJson('/api/pull/foursquare/status');
+        totalFound += fs.companiesFound || 0;
+        if (fsqResult === 'cancelled') { finishCombinedPull(totalFound, true); return; }
+
+        // Phase 3 - OpenStreetMap (66-100%)
+        currentPullSource = 'osm';
+        document.getElementById('pull-status-text').textContent = 'OpenStreetMap \u2014 Starting\u2026';
+        try {
+            await api('/api/pull/osm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ industries }),
+            });
+        } catch { finishCombinedPull(totalFound, true); return; }
+        const osmResult = await pollSource('/api/pull/osm/status', 'OpenStreetMap', 66, 100);
+        const os = await apiJson('/api/pull/osm/status');
+        totalFound += os.companiesFound || 0;
+
+        finishCombinedPull(totalFound, osmResult === 'cancelled');
+    }
+
+    function pollSource(statusUrl, label, pctStart, pctEnd) {
+        return new Promise(resolve => {
+            clearInterval(pullTimer);
+            setTimeout(() => {
+                pullTimer = setInterval(async () => {
+                    try {
+                        const s = await apiJson(statusUrl);
+                        const scaledPct = Math.round(pctStart + ((s.pct || 0) / 100) * (pctEnd - pctStart));
+                        document.getElementById('pull-bar').style.width = scaledPct + '%';
+                        document.getElementById('pull-pct').textContent = scaledPct + '%';
+                        document.getElementById('pull-stats').textContent = `${s.companiesFound || 0} companies found`;
+                        if (s.running) {
+                            document.getElementById('pull-status-text').textContent = s.cancelled
+                                ? `${label} \u2014 Stopping\u2026`
+                                : `${label} \u2014 Query ${s.queriesDone || 0} of ${s.queriesTotal || 0}\u2026`;
+                        } else {
+                            clearInterval(pullTimer);
+                            resolve(s.cancelled ? 'cancelled' : 'done');
+                        }
+                    } catch { clearInterval(pullTimer); resolve('error'); }
+                }, 1500);
+            }, 600);
+        });
+    }
+
+    function finishCombinedPull(totalFound, cancelled) {
+        currentPullSource = null;
+        clearInterval(pullTimer);
+        document.getElementById('pull-btn').disabled = false;
+        document.getElementById('pull-cancel-btn').classList.add('hidden');
+        document.getElementById('pull-cancel-btn').disabled = false;
+        document.getElementById('pull-cancel-btn').textContent = 'Stop';
+        if (!cancelled) {
+            document.getElementById('pull-bar').style.width = '100%';
+            document.getElementById('pull-pct').textContent = '100%';
+        }
+        document.getElementById('pull-status-text').textContent = cancelled ? 'Stopped.' : 'Complete!';
+        document.getElementById('pull-stats').textContent = `${totalFound} companies found`;
+        loadStats();
+        loadCityOptions();
+    }
+
+    // Dedupe
+    document.getElementById('dedupe-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('dedupe-btn');
+        const result = document.getElementById('dedupe-result');
+        btn.disabled = true;
+        result.textContent = 'Running\u2026';
+        try {
+            const data = await apiJson('/api/cleanup/dedupe', { method: 'POST' });
+            if (data.error) throw new Error(data.error);
+            result.textContent = data.removed > 0
+                ? `Removed ${data.removed} duplicate/empty contact${data.removed !== 1 ? 's' : ''}.`
+                : 'No duplicates found.';
+            result.className = 'text-xs text-emerald-400';
+            loadStats();
+            loadLeads();
+        } catch (err) {
+            result.textContent = `Error: ${err.message}`;
+            result.className = 'text-xs text-red-400';
+        }
+        btn.disabled = false;
+    });
+
+    // Backfill
+    document.getElementById('backfill-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('backfill-btn');
+        const result = document.getElementById('dedupe-result');
+        btn.disabled = true;
+        result.textContent = 'Backfilling\u2026';
+        try {
+            const data = await apiJson('/api/admin/backfill', { method: 'POST' });
+            if (data.error) throw new Error(data.error);
+            result.textContent = `Backfill complete. Updated ${data.updated || 0} records.`;
+            result.className = 'text-xs text-emerald-400';
+            loadStats();
+            loadLeads();
+        } catch (err) {
+            result.textContent = `Error: ${err.message}`;
+            result.className = 'text-xs text-red-400';
+        }
+        btn.disabled = false;
+    });
+
+    // Scrape Websites
+    document.getElementById('scrape-btn').addEventListener('click', async () => {
+        document.getElementById('scrape-btn').disabled = true;
+        document.getElementById('scrape-cancel-btn').classList.remove('hidden');
+        document.getElementById('scrape-cancel-btn').disabled = false;
+        document.getElementById('scrape-cancel-btn').textContent = 'Stop';
+        document.getElementById('scrape-progress').classList.remove('hidden');
+        await api('/api/enrich/scrape', { method: 'POST' });
+        startScrapePoll();
+    });
+
+    document.getElementById('scrape-cancel-btn').addEventListener('click', async () => {
+        document.getElementById('scrape-cancel-btn').disabled = true;
+        document.getElementById('scrape-cancel-btn').textContent = 'Stopping\u2026';
+        await api('/api/enrich/scrape/cancel', { method: 'POST' });
+    });
+
+    function startScrapePoll() {
+        clearInterval(scrapeTimer);
+        scrapeTimer = setInterval(async () => {
+            try {
+                const s = await apiJson('/api/enrich/scrape/status');
+                const pct = s.pct || 0;
+                document.getElementById('scrape-bar').style.width = pct + '%';
+                document.getElementById('scrape-pct').textContent = pct + '%';
+                document.getElementById('scrape-status-text').textContent =
+                    s.running ? `Scraping ${s.done} of ${s.total}\u2026` : 'Complete!';
+                document.getElementById('scrape-stats').textContent = `${s.found} contacts found`;
+
+                if (!s.running) {
+                    clearInterval(scrapeTimer);
+                    document.getElementById('scrape-btn').disabled = false;
+                    document.getElementById('scrape-cancel-btn').classList.add('hidden');
+                    loadStats();
+                }
+            } catch { clearInterval(scrapeTimer); }
+        }, 1500);
+    }
+
+    // Apollo Lookup
+    document.getElementById('apollo-btn').addEventListener('click', async () => {
+        document.getElementById('apollo-btn').disabled = true;
+        document.getElementById('apollo-cancel-btn').classList.remove('hidden');
+        document.getElementById('apollo-cancel-btn').disabled = false;
+        document.getElementById('apollo-cancel-btn').textContent = 'Stop';
+        document.getElementById('apollo-progress').classList.remove('hidden');
+        await api('/api/enrich/apollo', { method: 'POST' });
+        startApolloPoll();
+    });
+
+    document.getElementById('apollo-cancel-btn').addEventListener('click', async () => {
+        document.getElementById('apollo-cancel-btn').disabled = true;
+        document.getElementById('apollo-cancel-btn').textContent = 'Stopping\u2026';
+        await api('/api/enrich/apollo/cancel', { method: 'POST' });
+    });
+
+    function startApolloPoll() {
+        clearInterval(apolloTimer);
+        apolloTimer = setInterval(async () => {
+            try {
+                const s = await apiJson('/api/enrich/apollo/status');
+                const pct = s.pct || 0;
+                document.getElementById('apollo-bar').style.width = pct + '%';
+                document.getElementById('apollo-pct').textContent = pct + '%';
+                document.getElementById('apollo-status-text').textContent =
+                    s.running ? `Enriching ${s.done} of ${s.total}\u2026` : 'Complete!';
+                document.getElementById('apollo-stats').textContent = `${s.found} contacts found`;
+
+                if (!s.running) {
+                    clearInterval(apolloTimer);
+                    document.getElementById('apollo-btn').disabled = false;
+                    document.getElementById('apollo-cancel-btn').classList.add('hidden');
+                    loadStats();
+                }
+            } catch { clearInterval(apolloTimer); }
+        }, 1500);
+    }
+
+    // ── CSV Import ──────────────────────────────────────────────────────────────
+    document.getElementById('csv-import-btn').addEventListener('click', async () => {
+        const file = document.getElementById('csv-file').files[0];
+        const result = document.getElementById('csv-result');
+        if (!file) { result.textContent = 'Select a CSV file first.'; return; }
+
+        const btn = document.getElementById('csv-import-btn');
+        btn.disabled = true;
+        result.textContent = 'Parsing\u2026';
+
+        try {
+            const text = await file.text();
+            const rows = parseCSV(text);
+            if (!rows.length) { result.textContent = 'No valid rows found in file.'; btn.disabled = false; return; }
+            result.textContent = `Importing ${rows.length} rows\u2026`;
+
+            const data = await apiJson('/api/companies/import', {
+                method: 'POST',
+                body: JSON.stringify(rows),
+            });
+            if (data.error) throw new Error(data.error);
+            result.textContent = `Imported ${data.inserted} new companies (${data.total} rows in file).`;
+            result.className = 'text-xs text-emerald-400';
+            loadStats();
+            loadCityOptions();
+        } catch (err) {
+            result.textContent = `Error: ${err.message}`;
+            result.className = 'text-xs text-red-400';
+        }
+        btn.disabled = false;
+    });
+
+    function parseCSV(text) {
+        const lines = text.trim().split(/\r?\n/);
+        if (lines.length < 2) return [];
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+        return lines.slice(1).map(line => {
+            const vals = [];
+            let cur = '', inQ = false;
+            for (const ch of line) {
+                if (ch === '"') { inQ = !inQ; }
+                else if (ch === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
+                else { cur += ch; }
+            }
+            vals.push(cur.trim());
+            const row = {};
+            headers.forEach((h, i) => { row[h] = (vals[i] || '').replace(/^"|"$/g, ''); });
+            return row;
+        }).filter(r => r.name && r.name.length > 1);
+    }
+
+    // ── Export to Google Sheets ──────────────────────────────────────────────────
+    document.getElementById('sheets-export-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('sheets-export-btn');
+        const result = document.getElementById('sheets-export-result');
+        btn.disabled = true;
+        result.textContent = 'Pushing to Google Sheets\u2026';
+        try {
+            const data = await apiJson('/api/export/sheets', { method: 'POST' });
+            if (data.error) throw new Error(data.error);
+            result.textContent = `Pushed ${data.count} contacts to Google Sheets.`;
+            result.className = 'text-xs text-emerald-400';
+        } catch (err) {
+            result.textContent = `Error: ${err.message}`;
+            result.className = 'text-xs text-red-400';
+        }
+        btn.disabled = false;
+    });
+
+    // ── Website Leads ───────────────────────────────────────────────────────────
+    async function loadWebsiteLeads() {
+        try {
+            const [leads, stats] = await Promise.all([
+                apiJson('/api/website-leads'),
+                apiJson('/api/website-leads/stats'),
+            ]);
+
+            // Stats
+            document.getElementById('webLeadStats').innerHTML =
+                `<div class="flex items-center gap-4 text-sm">
+                    <span><strong class="text-white">${stats.total}</strong> <span class="text-gray-500">total leads</span></span>
+                    <span class="text-gray-700">\u00b7</span>
+                    <span><strong class="text-emerald-400">${stats.uncontacted}</strong> <span class="text-gray-500">uncontacted</span></span>
+                    <span class="text-gray-700">\u00b7</span>
+                    <span><strong class="text-white">${stats.today}</strong> <span class="text-gray-500">today</span></span>
+                    <span class="text-gray-700">\u00b7</span>
+                    <span><span class="text-gray-500">Avg savings:</span> <strong class="text-emerald-400">$${stats.avgSavings}/mo</strong></span>
+                </div>`;
+
+            // Table
+            const tbody = document.getElementById('webLeadRows');
+            const empty = document.getElementById('webLeadEmpty');
+
+            if (leads.length === 0) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            empty.classList.add('hidden');
+            tbody.innerHTML = leads.map(l => {
+                const date = new Date(l.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const isNew = !l.contacted;
+                const statusBadge = isNew
+                    ? `<span class="score-badge bg-yellow-500/20 text-yellow-400">New</span>`
+                    : `<span class="score-badge bg-emerald-500/20 text-emerald-400">Contacted</span>`;
+                const markBtn = isNew
+                    ? ` <button type="button" onclick="markWebLeadContacted(${l.id})" class="ml-1 px-1.5 py-0.5 rounded text-[0.65rem] text-gray-500 border border-white/10 hover:bg-white/5 cursor-pointer">Mark</button>`
+                    : '';
+
+                return `<tr class="table-row border-b border-white/[0.04]">
+                    <td class="px-4 py-2.5 font-medium text-gray-200">${escHtml(l.email || '')}</td>
+                    <td class="px-3 py-2.5 text-center text-gray-400">${l.phone_lines || '-'}</td>
+                    <td class="px-3 py-2.5 text-center text-gray-300">$${l.current_bill || 0}</td>
+                    <td class="px-3 py-2.5 text-center text-gray-400 capitalize">${escHtml(l.current_provider || '-')}</td>
+                    <td class="px-3 py-2.5 text-center text-emerald-400 font-semibold">$${l.monthly_savings || 0}</td>
+                    <td class="px-3 py-2.5 text-center text-xs text-gray-500">${escHtml(l.features || '-')}</td>
+                    <td class="px-3 py-2.5 text-center text-xs text-gray-500">${date}</td>
+                    <td class="px-3 py-2.5 text-center">${statusBadge}${markBtn}</td>
+                </tr>`;
+            }).join('');
+        } catch {
+            document.getElementById('webLeadStats').innerHTML =
+                '<span class="text-sm text-red-400">Could not load website leads \u2014 is BunnComm server running?</span>';
+        }
+    }
+
+    window.markWebLeadContacted = async (id) => {
+        await api('/api/website-leads/' + id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contacted: true }),
+        });
+        loadWebsiteLeads();
+    };
+
+    // ── Init ────────────────────────────────────────────────────────────────────
+    async function initApp() {
+        loadIndustryOptions();
+        loadCityOptions();
+        loadStats();
+        loadLeads();
+    }
+
+    // On page load, check auth via /api/stats
+    checkAuth().then(authed => {
+        if (authed) initApp();
+    });
 
 });
