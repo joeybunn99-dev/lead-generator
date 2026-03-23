@@ -5,6 +5,9 @@ const { extractContactInfo } = require('../scraper');
 const { enrichWithApollo } = require('../enricher');
 const { APOLLO_API_KEY } = require('../config');
 const { isDecisionMaker, isPersonalEmail, passesGate, parsePerson, BLOCKED_EMAIL_DOMAINS } = require('../lib/quality-gate');
+const { validateEmail } = require('../verifier');
+const { calculateScore } = require('../scorer');
+const { scrapeWithFirecrawl } = require('../lib/firecrawl-scraper');
 
 // ── Scrape state ─────────────────────────────────────────────────────────────
 const scrapeState = { running: false, cancelled: false, done: 0, total: 0, found: 0 };
@@ -32,7 +35,8 @@ router.post('/enrich/scrape', async (req, res) => {
         for (const company of companies) {
             if (scrapeState.cancelled) break;
             try {
-                const contact = await extractContactInfo(company.website);
+                // Use Firecrawl (falls back to Cheerio automatically)
+                const contact = await scrapeWithFirecrawl(company.website);
 
                 // Mark every company that shares this domain as scraped (prevents re-scraping duplicates)
                 if (company.domain) {
@@ -48,6 +52,9 @@ router.post('/enrich/scrape', async (req, res) => {
                      WHERE id = ?`,
                     [contact.phones[0] || null, contact.address || null, company.id]
                 );
+
+                // Track inserted contact IDs for post-processing
+                const insertedContactIds = [];
 
                 // Parse people lines into contacts
                 for (const line of (contact.people || [])) {
@@ -68,11 +75,37 @@ router.post('/enrich/scrape', async (req, res) => {
                     );
                     if (exists) continue;
 
-                    await run(
+                    const result = await run(
                         'INSERT INTO contacts (company_id, name, title, email, phone, source) VALUES (?,?,?,?,?,?)',
                         [company.id, parsed.name, parsed.title, email, phone, 'scraped']
                     );
+                    if (result.lastID) insertedContactIds.push({ id: result.lastID, email, phone });
                     scrapeState.found++;
+                }
+
+                // Post-processing: verify emails and score contacts
+                const peopleCount = insertedContactIds.length;
+                for (const c of insertedContactIds) {
+                    // Email verification
+                    let emailStatus = 'unverified';
+                    if (c.email) {
+                        try {
+                            const vResult = await validateEmail(c.email, company.website || company.domain || '');
+                            emailStatus = vResult.status.toLowerCase();
+                        } catch (e) {
+                            // Keep unverified on error
+                        }
+                        await run('UPDATE contacts SET email_status = ? WHERE id = ?', [emailStatus, c.id]);
+                    }
+
+                    // Lead scoring
+                    const score = calculateScore({
+                        website: company.website,
+                        verification_status: emailStatus === 'valid' ? 'Valid' : emailStatus,
+                        people: peopleCount > 0 ? new Array(peopleCount) : [],
+                        rating: company.rating,
+                    });
+                    await run('UPDATE contacts SET lead_score = ? WHERE id = ?', [score, c.id]);
                 }
             } catch (err) {
                 console.error(`Scrape error [${company.name}]:`, err.message);
@@ -174,58 +207,145 @@ router.post('/enrich/apollo/cancel', (_req, res) => {
     res.json({ ok: true });
 });
 
-// ── Cleanup ───────────────────────────────────────────────────────────────────
-router.post('/cleanup/dedupe', async (_req, res) => {
+// ── Backfill: score all existing contacts + verify emails ────────────────────
+router.post('/admin/backfill', async (req, res) => {
     try {
-        let removed = 0;
+        const contacts = await query(`
+            SELECT co.id, co.email, co.email_status, co.name, co.title,
+                   c.website, c.rating, c.domain,
+                   (SELECT COUNT(*) FROM contacts WHERE company_id = c.id) as people_count
+            FROM contacts co
+            JOIN companies c ON c.id = co.company_id
+        `);
 
-        // Step 1a: emails starting with a digit (phone-number artifacts like "2840391info@...")
-        const r1a = await run(
-            `DELETE FROM contacts WHERE email IS NOT NULL AND email != '' AND email GLOB '[0-9]*'`, []
-        );
-        removed += Number(r1a.rowsAffected || 0);
+        let verified = 0, scored = 0;
 
-        // Step 1b: local part longer than 40 chars (system IDs, hex tokens)
-        const r1b = await run(
-            `DELETE FROM contacts WHERE email IS NOT NULL AND email != '' AND INSTR(email,'@') > 41`, []
-        );
-        removed += Number(r1b.rowsAffected || 0);
+        for (const contact of contacts) {
+            // Verify email if unverified
+            if (contact.email && contact.email_status === 'unverified') {
+                try {
+                    const result = await validateEmail(contact.email, contact.website || contact.domain || '');
+                    await run('UPDATE contacts SET email_status = ? WHERE id = ?', [result.status.toLowerCase(), contact.id]);
+                    contact.email_status = result.status.toLowerCase();
+                    verified++;
+                } catch (e) {
+                    // Skip on error
+                }
+            }
 
-        // Step 1c: blocked platform domains — one DELETE per domain (no large IN list)
-        for (const domain of BLOCKED_EMAIL_DOMAINS) {
-            const r = await run(`DELETE FROM contacts WHERE email LIKE ?`, [`%@${domain}`]);
-            removed += Number(r.rowsAffected || 0);
-            // also catch subdomains: %.wixpress.com
-            const r2 = await run(`DELETE FROM contacts WHERE email LIKE ?`, [`%@%.${domain}`]);
-            removed += Number(r2.rowsAffected || 0);
+            // Calculate score
+            const score = calculateScore({
+                website: contact.website,
+                verification_status: contact.email_status === 'valid' ? 'Valid' : contact.email_status,
+                people: contact.people_count > 0 ? new Array(contact.people_count) : [],
+                rating: contact.rating,
+            });
+            await run('UPDATE contacts SET lead_score = ? WHERE id = ?', [score, contact.id]);
+            scored++;
         }
 
-        // Step 2: deduplicate — for each email group with >1 row, delete all but the lowest id
-        const dupeGroups = await query(
-            `SELECT LOWER(email) as email FROM contacts
-             WHERE email IS NOT NULL AND email != ''
-             GROUP BY LOWER(email) HAVING COUNT(*) > 1`, []
+        res.json({ ok: true, verified, scored, total: contacts.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Cleanup: cross-source deduplication ──────────────────────────────────────
+router.post('/cleanup/dedupe', async (_req, res) => {
+    try {
+        let companiesMerged = 0, contactsDeduped = 0, contactsRemoved = 0;
+
+        // Step 0: Clean junk emails (digit-prefixed, long local parts, blocked domains)
+        const r0a = await run(
+            `DELETE FROM contacts WHERE email IS NOT NULL AND email != '' AND email GLOB '[0-9]*'`, []
         );
-        for (const row of dupeGroups) {
-            const [keeper] = await query(
-                `SELECT MIN(id) as id FROM contacts WHERE LOWER(email) = ?`, [row.email]
+        contactsRemoved += Number(r0a.rowsAffected || 0);
+
+        const r0b = await run(
+            `DELETE FROM contacts WHERE email IS NOT NULL AND email != '' AND INSTR(email,'@') > 41`, []
+        );
+        contactsRemoved += Number(r0b.rowsAffected || 0);
+
+        for (const domain of BLOCKED_EMAIL_DOMAINS) {
+            const r = await run(`DELETE FROM contacts WHERE email LIKE ?`, [`%@${domain}`]);
+            contactsRemoved += Number(r.rowsAffected || 0);
+            const r2 = await run(`DELETE FROM contacts WHERE email LIKE ?`, [`%@%.${domain}`]);
+            contactsRemoved += Number(r2.rowsAffected || 0);
+        }
+
+        // Step 1: Company-level dedup by domain
+        const withDomain = await query(`
+            SELECT domain, GROUP_CONCAT(id) as ids, COUNT(*) as cnt
+            FROM companies
+            WHERE domain IS NOT NULL AND domain != ''
+            GROUP BY domain
+            HAVING cnt > 1
+        `);
+
+        for (const group of withDomain) {
+            const ids = group.ids.split(',').map(Number);
+            // Find winner: most populated fields
+            const companies = await query(
+                `SELECT *,
+                    (CASE WHEN website IS NOT NULL AND website != '' THEN 1 ELSE 0 END +
+                     CASE WHEN phone IS NOT NULL AND phone != '' THEN 1 ELSE 0 END +
+                     CASE WHEN address IS NOT NULL AND address != '' THEN 1 ELSE 0 END +
+                     CASE WHEN rating IS NOT NULL THEN 1 ELSE 0 END) as field_count
+                FROM companies WHERE id IN (${ids.join(',')})
+                ORDER BY field_count DESC, id ASC`
             );
-            if (keeper?.id != null) {
-                const r = await run(
-                    `DELETE FROM contacts WHERE LOWER(email) = ? AND id != ?`,
-                    [row.email, keeper.id]
-                );
-                removed += Number(r.rowsAffected || 0);
+
+            const winner = companies[0];
+            const losers = companies.slice(1);
+
+            for (const loser of losers) {
+                // Merge missing fields into winner
+                const updates = [];
+                const args = [];
+                for (const field of ['website', 'phone', 'address', 'rating', 'lat', 'lng']) {
+                    if (!winner[field] && loser[field]) {
+                        updates.push(`${field} = ?`);
+                        args.push(loser[field]);
+                    }
+                }
+                if (updates.length > 0) {
+                    await run(`UPDATE companies SET ${updates.join(', ')} WHERE id = ?`, [...args, winner.id]);
+                }
+
+                // Reassign contacts from loser to winner
+                await run('UPDATE contacts SET company_id = ? WHERE company_id = ?', [winner.id, loser.id]);
+                // Delete loser company
+                await run('DELETE FROM companies WHERE id = ?', [loser.id]);
+                companiesMerged++;
             }
         }
 
-        // Step 3: contacts with no email AND no phone (unfindable)
+        // Step 2: Contact-level dedup by email
+        const dupEmails = await query(`
+            SELECT LOWER(email) as email, GROUP_CONCAT(id) as ids, COUNT(*) as cnt
+            FROM contacts
+            WHERE email IS NOT NULL AND email != ''
+            GROUP BY LOWER(email)
+            HAVING cnt > 1
+        `);
+
+        for (const group of dupEmails) {
+            const ids = group.ids.split(',').map(Number);
+            const keepId = Math.min(...ids);
+            const deleteIds = ids.filter(id => id !== keepId);
+            for (const id of deleteIds) {
+                await run('DELETE FROM contacts WHERE id = ?', [id]);
+                contactsDeduped++;
+            }
+        }
+
+        // Step 3: Remove contacts with no email AND no phone
         const r3 = await run(
             `DELETE FROM contacts WHERE (email IS NULL OR email = '') AND (phone IS NULL OR phone = '')`, []
         );
-        removed += Number(r3.rowsAffected || 0);
+        contactsRemoved += Number(r3.rowsAffected || 0);
 
-        res.json({ ok: true, removed });
+        res.json({ ok: true, companiesMerged, contactsDeduped, contactsRemoved });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
