@@ -634,6 +634,40 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.disabled = false;
     });
 
+    // Email Discovery
+    document.getElementById('discover-btn').addEventListener('click', async () => {
+        const limit = document.getElementById('discovery-limit').value;
+        await api('/api/enrich/discover-emails', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit: parseInt(limit) })
+        });
+        document.getElementById('discover-btn').classList.add('hidden');
+        document.getElementById('discover-cancel-btn').classList.remove('hidden');
+        document.getElementById('discover-progress').classList.remove('hidden');
+
+        const poll = setInterval(async () => {
+            try {
+                const s = await apiJson('/api/enrich/discover-emails/status');
+                const pct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
+                document.getElementById('discover-pct').textContent = pct + '%';
+                document.getElementById('discover-bar').style.width = pct + '%';
+                document.getElementById('discover-status-text').textContent = s.running ? 'Discovering...' : 'Complete';
+                document.getElementById('discover-stats').textContent = `${s.done} tested · ${s.found} emails found`;
+                if (!s.running) {
+                    clearInterval(poll);
+                    document.getElementById('discover-btn').classList.remove('hidden');
+                    document.getElementById('discover-cancel-btn').classList.add('hidden');
+                    loadStats();
+                }
+            } catch { clearInterval(poll); }
+        }, 2000);
+    });
+
+    document.getElementById('discover-cancel-btn').addEventListener('click', async () => {
+        await api('/api/enrich/discover-emails/cancel', { method: 'POST' });
+    });
+
     // Scrape Websites
     document.getElementById('scrape-btn').addEventListener('click', async () => {
         document.getElementById('scrape-btn').disabled = true;

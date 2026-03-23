@@ -373,6 +373,36 @@
             </div>
         </div>
 
+        <!-- Email Discovery Card -->
+        <div class="glass-strong rounded-xl p-5">
+            <h2 class="text-base font-bold text-white mb-1">Discover Emails</h2>
+            <p class="text-xs text-gray-500 mb-4">Find business emails by testing common addresses (info@, contact@, sales@) via SMTP verification. Free and unlimited.</p>
+            <div class="flex items-center gap-3 flex-wrap">
+                <select id="discovery-limit" class="px-3 py-2 rounded-lg bg-surface-950 border border-white/10 text-sm text-gray-300">
+                    <option value="50">50 companies</option>
+                    <option value="100" selected>100 companies</option>
+                    <option value="500">500 companies</option>
+                    <option value="1000">1000 companies</option>
+                </select>
+                <button id="discover-btn" class="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-600/30 transition-colors">
+                    Discover Emails
+                </button>
+                <button id="discover-cancel-btn" class="hidden px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm font-medium border border-red-500/30">
+                    Stop
+                </button>
+            </div>
+            <div id="discover-progress" class="hidden mt-3">
+                <div class="flex justify-between text-xs text-gray-500 mb-1.5">
+                    <span id="discover-status-text">Discovering...</span>
+                    <span id="discover-pct">0%</span>
+                </div>
+                <div class="h-2 rounded-full bg-surface-950 overflow-hidden">
+                    <div id="discover-bar" class="progress-bar h-2 rounded-full bg-gradient-to-r from-emerald-500 to-green-500" style="width:0%"></div>
+                </div>
+                <div id="discover-stats" class="text-xs text-gray-600 mt-1.5"></div>
+            </div>
+        </div>
+
         <!-- Enrich Contacts -->
         <div class="glass-strong rounded-xl p-5">
             <h2 class="text-base font-bold text-white mb-1">Enrich Contacts</h2>
