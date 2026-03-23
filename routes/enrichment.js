@@ -351,4 +351,38 @@ router.post('/cleanup/dedupe', async (_req, res) => {
     }
 });
 
+// ── Email Discovery ──────────────────────────────────────────────────────────
+const emailDiscoveryState = { running: false, cancelled: false, done: 0, total: 0, found: 0 };
+
+router.post('/enrich/discover-emails', async (req, res) => {
+    if (emailDiscoveryState.running) return res.json({ message: 'Already running', state: emailDiscoveryState });
+    const { limit = 100, city = null } = req.body || {};
+    emailDiscoveryState.running = true;
+    emailDiscoveryState.cancelled = false;
+    emailDiscoveryState.done = 0;
+    emailDiscoveryState.found = 0;
+    emailDiscoveryState.total = limit;
+    res.json({ started: true, limit });
+
+    const { batchDiscoverEmails } = require('../lib/email-discovery');
+    try {
+        const result = await batchDiscoverEmails(query, run, { limit, city });
+        emailDiscoveryState.found = result.found;
+        emailDiscoveryState.done = result.tested;
+    } catch (err) {
+        console.error('Email discovery error:', err);
+    } finally {
+        emailDiscoveryState.running = false;
+    }
+});
+
+router.get('/enrich/discover-emails/status', (req, res) => {
+    res.json(emailDiscoveryState);
+});
+
+router.post('/enrich/discover-emails/cancel', (req, res) => {
+    emailDiscoveryState.cancelled = true;
+    res.json({ ok: true });
+});
+
 module.exports = router;
