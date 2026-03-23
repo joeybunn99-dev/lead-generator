@@ -39,7 +39,7 @@ router.get('/stats', async (req, res) => {
 // ── Contacts (main leads view) ────────────────────────────────────────────────
 router.get('/contacts', async (req, res) => {
     try {
-        const { search, industry, city, hasEmail, hasPhone, notContacted, page = 1, limit = 50 } = req.query;
+        const { search, industry, city, hasEmail, hasPhone, notContacted, hasVerified, sortBy, page = 1, limit = 50 } = req.query;
         const conditions = [];
         const args = [];
 
@@ -52,19 +52,21 @@ router.get('/contacts', async (req, res) => {
         if (hasEmail === 'true')  { conditions.push('co.email IS NOT NULL'); }
         if (hasPhone === 'true')  { conditions.push('co.phone IS NOT NULL'); }
         if (notContacted === 'true') { conditions.push('co.contacted = 0'); }
+        if (hasVerified === 'true') { conditions.push("co.email_status = 'valid'"); }
 
         const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
         const offset = (Number(page) - 1) * Number(limit);
 
+        const orderBy = sortBy === 'score' ? 'co.lead_score DESC' : 'c.rating DESC, co.created_at DESC';
         const rows = await query(
             `SELECT co.id, co.name, co.title, co.email, co.email_status, co.phone,
-                    co.source, co.contacted, co.created_at,
+                    co.source, co.contacted, co.created_at, co.lead_score,
                     c.id as company_id, c.name as company_name, c.website,
                     c.city, c.state, c.industry, c.rating, c.address
              FROM contacts co
              JOIN companies c ON c.id = co.company_id
              ${where}
-             ORDER BY c.rating DESC, co.created_at DESC
+             ORDER BY ${orderBy}
              LIMIT ? OFFSET ?`,
             [...args, Number(limit), offset]
         );

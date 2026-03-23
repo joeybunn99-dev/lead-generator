@@ -179,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── LEADS TAB ───────────────────────────────────────────────────────────────
     let leadsPage = 1;
+    let extraFilters = {}; // for stat card click filters
 
     function getLeadsParams() {
         const params = new URLSearchParams();
@@ -191,10 +192,63 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.getElementById('leads-has-email').checked)      params.set('hasEmail', 'true');
         if (document.getElementById('leads-has-phone').checked)      params.set('hasPhone', 'true');
         if (document.getElementById('leads-not-contacted').checked)  params.set('notContacted', 'true');
+        // Extra filters from stat card clicks
+        if (extraFilters.hasVerified) params.set('hasVerified', 'true');
+        if (extraFilters.sortBy)     params.set('sortBy', extraFilters.sortBy);
         params.set('page', leadsPage);
         params.set('limit', document.getElementById('leads-limit').value);
         return params;
     }
+
+    // ── Clickable stat cards ──
+    function clearFilters() {
+        document.getElementById('leads-search').value = '';
+        document.getElementById('leads-industry').value = '';
+        document.getElementById('leads-city').value = '';
+        document.getElementById('leads-has-email').checked = false;
+        document.getElementById('leads-has-phone').checked = false;
+        document.getElementById('leads-not-contacted').checked = false;
+        extraFilters = {};
+        leadsPage = 1;
+        // Remove active highlight from all stat cards
+        document.querySelectorAll('[data-filter]').forEach(c => c.classList.remove('ring-1', 'ring-brand-500'));
+    }
+
+    document.querySelectorAll('[data-filter]').forEach(card => {
+        card.addEventListener('click', () => {
+            clearFilters();
+            card.classList.add('ring-1', 'ring-brand-500');
+            const filter = card.dataset.filter;
+            switch (filter) {
+                case 'companies':
+                    // Switch to companies tab
+                    document.querySelector('[data-tab="companies"]').click();
+                    return;
+                case 'co-phone':
+                    document.querySelector('[data-tab="companies"]').click();
+                    return;
+                case 'co-website':
+                    document.querySelector('[data-tab="companies"]').click();
+                    return;
+                case 'contacts':
+                    // Show all contacts — no filter needed
+                    break;
+                case 'has-email':
+                    document.getElementById('leads-has-email').checked = true;
+                    break;
+                case 'verified':
+                    extraFilters.hasVerified = true;
+                    break;
+                case 'has-phone':
+                    document.getElementById('leads-has-phone').checked = true;
+                    break;
+                case 'avg-score':
+                    extraFilters.sortBy = 'score';
+                    break;
+            }
+            loadLeads();
+        });
+    });
 
     async function loadLeads() {
         const tbody = document.getElementById('leads-tbody');
