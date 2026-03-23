@@ -16,11 +16,19 @@ router.get('/stats', async (req, res) => {
              FROM companies c LEFT JOIN contacts co ON co.company_id = c.id
              GROUP BY c.industry ORDER BY companies DESC`, []
         );
+        const [coWithPhone] = await query('SELECT COUNT(*) as n FROM companies WHERE phone IS NOT NULL AND length(phone) > 0', []);
+        const [coWithWebsite] = await query('SELECT COUNT(*) as n FROM companies WHERE website IS NOT NULL AND length(website) > 0', []);
+        const [verifiedEmails] = await query("SELECT COUNT(*) as n FROM contacts WHERE email_status = 'valid'", []);
+        const [avgScore] = await query('SELECT ROUND(AVG(lead_score)) as n FROM contacts WHERE lead_score > 0', []);
         res.json({
             totalCompanies: totals.companies,
             totalContacts: ctotals.contacts,
             contactsWithEmail: withEmail.n,
             contactsWithPhone: withPhone.n,
+            companiesWithPhone: coWithPhone.n,
+            companiesWithWebsite: coWithWebsite.n,
+            verifiedEmails: verifiedEmails.n,
+            avgLeadScore: avgScore.n || 0,
             byIndustry,
         });
     } catch (err) {

@@ -169,6 +169,11 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('stat-email').textContent = s.contactsWithEmail?.toLocaleString() ?? '0';
             document.getElementById('stat-phone').textContent = s.contactsWithPhone?.toLocaleString() ?? '0';
             document.getElementById('stat-companies').textContent = s.totalCompanies?.toLocaleString() ?? '0';
+            const el = (id) => document.getElementById(id);
+            if (el('stat-co-phone')) el('stat-co-phone').textContent = s.companiesWithPhone?.toLocaleString() ?? '0';
+            if (el('stat-co-website')) el('stat-co-website').textContent = s.companiesWithWebsite?.toLocaleString() ?? '0';
+            if (el('stat-verified')) el('stat-verified').textContent = s.verifiedEmails?.toLocaleString() ?? '0';
+            if (el('stat-avg-score')) el('stat-avg-score').textContent = s.avgLeadScore ?? '0';
         } catch { /* ignore */ }
     }
 
