@@ -216,10 +216,84 @@ Lead Generator/
 
 ---
 
+## Data Migration Strategy
+
+### Schema Migration
+- `ALTER TABLE contacts ADD COLUMN lead_score INTEGER DEFAULT 0` — safe, existing rows get 0
+- `ALTER TABLE companies ADD COLUMN firecrawl_scraped INTEGER DEFAULT 0` — safe, existing rows get 0
+- `contacts.email_status` column already exists (DEFAULT 'unverified') — no migration needed
+
+### Backfill (Phase 2.5)
+- After schema changes, run a one-time backfill:
+  - Score all 558 existing contacts using `scorer.js`
+  - Optionally verify all 264 existing emails via MX check (batch, with rate limiting)
+  - Update `email_status` from 'unverified' to 'valid'/'invalid'/'risky'
+- Backfill exposed as `POST /api/admin/backfill` endpoint (auth required)
+
+### Cross-Source Dedup Rules
+- Match: normalized domain (primary), fuzzy name + exact city (secondary)
+- Winner: record with most populated fields; ties broken by earliest `created_at`
+- Contact-level dedup: same email = same contact (keep one, reassign to survivor company)
+- Runs: on-demand via UI button (like existing dedupe), NOT automatically on every pull
+
+---
+
+## Auth Bootstrap
+
+### First-Run Setup
+- `npm run setup` — interactive CLI that prompts for username + password
+- Generates bcrypt hash, writes `AUTH_PASSWORD_HASH` and `JWT_SECRET` (random 64-char hex) to `.env`
+- If `.env` already has these values, skips with a message
+- If app starts without `AUTH_PASSWORD_HASH`, falls back to legacy client-side auth with a console warning
+
+### JWT Configuration
+- Token expiration: 24 hours
+- No refresh tokens (internal tool — just re-login)
+- `POST /api/logout` clears the httpOnly cookie
+- Cookie flags: `httpOnly`, `sameSite: strict`, `secure` when behind HTTPS
+
+---
+
+## SSE Lifecycle
+
+- `GET /api/jobs/:id/stream` — SSE endpoint
+- If job already completed: sends final state event immediately, then closes
+- On client disconnect + reconnect: sends current state (no replay of missed events)
+- `GET /api/jobs/:id` — non-streaming fallback for polling (returns current job state as JSON)
+- Max concurrent SSE connections: not limited (internal tool, single user)
+
+---
+
+## Rate Limiting Details
+
+- Static files (`/public/*`) are exempted from rate limiting
+- Rate limiter uses `X-Forwarded-For` header when behind nginx (`trustProxy: true`)
+- Global: 100 req/min per IP (API routes only)
+- Scrape/enrich: 10 req/min
+- Login: 5 attempts per 15 min
+
+---
+
+## PDF Generation
+
+- Uses existing `generate-pdf.js` which depends on `pdfkit` (already in package.json)
+- No Puppeteer or headless browser needed — pure Node.js PDF generation
+- ~12KB of existing code, just needs an endpoint to call it
+
+---
+
+## Google Sheets Export
+
+- Already implemented via n8n webhook push (existing code in routes/leads.js)
+- No OAuth needed — n8n handles the Google Sheets API via its own credentials
+- Just move existing code into `routes/exports.js` as-is
+
+---
+
 ## Implementation Order
 
 1. Security (config, auth, validation, rate limiting)
-2. Database (new columns, indexes, transactions)
+2. Database (new columns, indexes, transactions, backfill)
 3. Architecture (split routes, logging, job manager)
 4. Scraping pipeline (Firecrawl, verification, scoring, dedup)
 5. Frontend (Tailwind, dark mode, scores, badges, URL-to-leads, SSE, PDF)
