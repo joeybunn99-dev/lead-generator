@@ -1,59 +1,48 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
+const pinoHttp = require('pino-http');
+const cookieParser = require('cookie-parser');
 const { initDb } = require('./database');
+const logger = require('./lib/logger');
+const { requireAuth, handleLogin, handleLogout, loginLimiter, apiLimiter } = require('./middleware/auth');
+const { validate, loginSchema } = require('./middleware/validate');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
+app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url.startsWith('/style') || req.url.endsWith('.js') || req.url.endsWith('.css') || req.url.endsWith('.webp') } }));
+
+// Static files (no auth, no rate limit)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize Database
-try {
-    initDb();
-} catch (err) {
-    console.error('Database initialization failed:', err);
-}
+// Public routes (no auth)
+app.post('/api/login', loginLimiter, validate(loginSchema), handleLogin);
+app.post('/api/logout', handleLogout);
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-// API Routes Placeholder
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', message: 'NC B2B Lead Engine API is running' });
-});
+// Protected API routes
+app.use('/api', apiLimiter, requireAuth);
 
-// Import and use routes (to be created)
-const leadsRoutes = require('./routes/leads');
-app.use('/api', leadsRoutes);
-// app.useState('/api/leads', leadsRoutes); // Kept original structure but mapped to /api for easier routing in app.js
+// Mount route modules
+app.use('/api', require('./routes/contacts'));
+app.use('/api', require('./routes/companies'));
+app.use('/api', require('./routes/pulls'));
+app.use('/api', require('./routes/enrichment'));
+app.use('/api', require('./routes/exports'));
 
-app.post('/api/settings/logo', (req, res) => {
-    // Simple file stream read for this demo environment without multer
-    try {
-        const filePath = path.join(__dirname, 'public', 'logo.webp');
-        const writeStream = fs.createWriteStream(filePath);
-        req.pipe(writeStream);
-
-        req.on('end', () => {
-            res.json({ message: 'Logo uploaded successfully' });
-        });
-
-        writeStream.on('error', (err) => {
-            res.status(500).json({ error: 'Failed to write logo file' });
-        });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// Start server only when run directly (not when imported by Netlify function)
-if (require.main === module) {
+async function start() {
+    await initDb();
     app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
-        console.log(`Open http://localhost:${PORT} in your browser.`);
+        logger.info({ port: PORT }, `Lead Generator running at http://localhost:${PORT}`);
     });
 }
 
-module.exports = app;
+start().catch(err => {
+    logger.error(err, 'Failed to start server');
+    process.exit(1);
+});
