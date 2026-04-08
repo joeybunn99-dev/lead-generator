@@ -1,0 +1,3 @@
+# Runs before every commit
+# Add linting or tests here when ready
+# npm test
