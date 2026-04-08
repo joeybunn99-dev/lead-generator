@@ -39,10 +39,10 @@ A Claude Code skill called `bunn-learn` that applies the autoresearch pattern (a
 
 ### Skill Structure
 
-Claude Code custom slash commands live in `.claude/commands/` as markdown files. Sub-commands use the hyphenated naming convention:
+Claude Code custom slash commands live in `.claude/skills/` as markdown files. Sub-commands use the hyphenated naming convention:
 
 ```
-.claude/commands/
+.claude/skills/
   bunn-learn-research.md    # Mode 1: autonomous research loop
   bunn-learn-study.md       # Mode 2: codebase comprehension (Phase 3)
   bunn-learn-evolve.md      # Mode 3: meta-learning (Phase 4)
@@ -117,11 +117,11 @@ Every research output is scored 1-10 on five dimensions using **countable criter
 
 The playbook includes 3 golden examples read before every self-scoring to anchor ratings:
 
-**Example A — Score 4.2 (Poor research):**
+**Example A — Score 1.6 (Poor research):**
 > "LiveKit is a real-time communication platform. It supports WebRTC. You can use it for video calls."
 > Depth: 2 (0 primary sources, 0 code), Diversity: 2 (web search only), Corroboration: 1 (0 verified), Actionability: 2 (0 steps), Novelty: 1 (0 non-obvious)
 
-**Example B — Score 6.4 (Adequate research):**
+**Example B — Score 5.6 (Adequate research):**
 > "LiveKit's SIP integration requires the SIP Trunk resource. Here's a basic config from the docs: [code]. Community reports latency issues with Twilio trunks — see GitHub issue #1234. Alternative: use LiveKit's hosted SIP service."
 > Depth: 5 (2 primary sources, 1 code example), Diversity: 6 (docs + GitHub + web = 3 types), Corroboration: 5 (2 claims cross-checked), Actionability: 8 (concrete config), Novelty: 4 (1 non-obvious finding)
 
