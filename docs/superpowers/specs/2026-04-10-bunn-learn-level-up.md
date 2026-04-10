@@ -241,12 +241,14 @@ Classification heuristic (natural language, not regex):
 - **QUANTITATIVE-COMPARISON** if the topic is asking which of two-plus options is better along measurable dimensions (accuracy, latency, cost, throughput, memory, etc.), even if phrased loosely. Examples: "X vs Y," "compare A B C," "is X good enough for Z," "which is fastest," "is X cheaper than Y at scale."
 - **NARRATIVE** for everything else — "how do I," "what is," "best practices for," "why does X happen."
 
-**Persistence:** The mode flag is written to the cycle 1 wip file as the first line under the sources list:
+**Persistence:** The mode flag is written to the cycle 1 wip file as a new top-level section, inserted immediately after the `# <Topic> — Cycle <N> Raw Findings` header and before the existing `## Sources Queried` section:
 
 ```
 ## Research Mode
 mode: QUANTITATIVE-COMPARISON
 ```
+
+This insertion point is stable across the existing wip file template (SKILL.md Step 3) and every later step can find the flag by reading the `## Research Mode` header, regardless of what else the wip file contains.
 
 **Consumers (read only, never re-classify):**
 - Step 4e (Metric Extraction) — runs if mode is QUANTITATIVE-COMPARISON, else no-op
@@ -278,7 +280,7 @@ No file is modified before its dependencies exist.
 **On the practice run (faster-whisper vs Deepgram):**
 - Cycle 1 hits at least 5 source types, with at least 3 coming from the new voice-AI row (HuggingFace, GitHub issues on the real repos, arXiv or LiveKit Discord). If cycle 1 falls back on generic web search as its top sources, the row wasn't calibrated well enough.
 - Research mode classification picks `QUANTITATIVE-COMPARISON` automatically.
-- Step 4e produces a metric table with at least 6 rows (WER, latency p50, latency p99, VRAM, cost per minute, plus at least one streaming-specific metric). Every cell is either a sourced number or `N/A`.
+- Step 4e produces a metric table with at least 6 rows (WER, latency p50, latency p99, VRAM, cost per minute, plus at least one streaming-specific metric) OR a documented reason in the report for why fewer metrics were available. Every cell is either a sourced number or `N/A`.
 - If any contradictions surface in cycle 1 synthesis, cycle 2 fires at least one explicit tiebreaker query per contradiction, logged in the `contradictions_escalated` field.
 - At least one YouTube source succeeds via the new fallback chain.
 - Final report uses the comparison template, with TL;DR, metric table, winner-by-dimension, and recommendation matrix all populated — including the Joshua-specific row.
@@ -296,7 +298,7 @@ No file is modified before its dependencies exist.
 - **The voice-AI source row is a guess.** It will almost certainly be wrong in some of its rankings. That's the point of `untested baseline` — the first real run calibrates it. Risk is that the guess is *so* wrong it hurts the first run's score before calibration catches up.
 - **YouTube transcript services could all go down simultaneously.** The five-step fallback chain is resilient to any one service failing, but not to all of them. Acceptable risk; metadata-only counts as partial and the run still completes.
 - **The asker-specific Recommendation Matrix row depends on the skill successfully reading project memory.** If memory access fails or the relevant memory file doesn't exist, the row falls back to generic "low-volume voice agent" context. The report is still valid, just less personalized.
-- **Contradiction escalation could inflate the cycle 2 query budget.** If cycle 1 finds many contradictions, cycle 2 spends most of its queries on tiebreakers rather than depth. This is probably fine (tiebreakers are high-value queries) but worth watching on the first run.
+- **Contradiction escalation could inflate the cycle 2 query budget.** If cycle 1 finds many contradictions, cycle 2 spends most of its queries on tiebreakers rather than depth. This is probably fine (tiebreakers are high-value queries) but worth watching on the first run. If the first run shows query-budget exhaustion, the implementation plan can add a soft cap — e.g., "at most N tiebreaker queries per cycle, prioritized by which contradictions affect the recommendation matrix." Not adding a cap in this spec; watching for the problem first.
 
 ## Out of Scope (Explicit)
 
