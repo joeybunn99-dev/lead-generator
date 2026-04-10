@@ -743,7 +743,11 @@ This is deliberately narrative-adjacent with a comparison framing so the mode cl
 
 - [ ] **Step 2: Run the skill and observe its cycle 1 plan step**
 
-In a fresh Claude Code session, invoke: `/bunn-learn python logging vs loguru for small scripts --threshold 6.0 --max-cycles 2 --max-fetches 5`
+In a fresh Claude Code session, trigger the skill with a natural-language request that matches its activation triggers (the skill activates on "research", "compare options for", "deep dive", etc. — there is no `/bunn-learn` slash command).
+
+Example prompt to use:
+
+> "Run bunn-learn research on: python logging vs loguru for small scripts. Use --threshold 6.0 --max-cycles 2 --max-fetches 5."
 
 Watch for the skill to output the research mode classification before source selection. Expected: a one-line classification announcing `mode: QUANTITATIVE-COMPARISON` (because "X vs Y" triggers it).
 
