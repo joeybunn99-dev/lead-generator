@@ -1,4 +1,31 @@
 node_modules/
-leads.db
+
+# Env files (all variants)
 .env
+.env.*
+!.env.example
+
+# Database and logs
+leads.db
 *.log
+errors.log
+.email-crawler-resume.json
+
+# Tool caches
+.claude/
+.firecrawl/
+.netlify/
+
+# Scratch / debug artifacts
+evp_app_bundle.js
+evp_config.txt
+evp_cookies.txt
+evp_page.html
+evp_postpreform.js
+evp_request.json
+
+# Data snapshots
+nc-municipalities.json
+nc-municipalities-raw.json
+nc-municipalities-census.json
+n8n-lead-export.json

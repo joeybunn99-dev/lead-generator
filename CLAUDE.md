@@ -11,8 +11,8 @@ B2B lead generation tool for NC businesses. Express + SQLite + Tailwind.
 ## Architecture
 - `server.js` — Express entry, mounts all routes
 - `routes/` — modular: companies, contacts, enrichment, campaigns, exports, pulls, municipal
-- `database.js` — SQLite via better-sqlite3, `leads.db`
-- `public/` — single-page app (`app.js` + `app.html`)
+- `database.js` — SQLite via `@libsql/client` (Turso-compatible), `leads.db`
+- `public/` — single-page app (`index.html` + `app.js`)
 - `scraper.js` — Cheerio-based web scraper
 - `lib/email-discovery.js` — SMTP email discovery
 
@@ -24,5 +24,5 @@ B2B lead generation tool for NC businesses. Express + SQLite + Tailwind.
 ## Rules
 - Use conventional commits
 - Keep routes modular — one file per domain
-- SQLite queries use better-sqlite3 sync API
+- SQLite queries use `@libsql/client` async API (`query`, `queryOne`, `run` from `./database`)
 - Email crawler respects rate limits (2s delay between requests)
