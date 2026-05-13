@@ -1,0 +1,367 @@
+<!doctype html>
+<!--
+  Joshua landing page — draft 2026-04-21
+  Drop into bunncom.com/joshua/ or deploy as joshua.bunncom.com
+
+  This is intentionally conservative: clean typography, one strong CTA, no marketing gimmicks.
+  Inline CSS to keep it one-file deployable. No JS required beyond the form handler.
+
+  Replace {{CALENDLY_LINK}}, {{STRIPE_PILOT_LINK}}, {{HOPE_DEMO_AUDIO_URL}} before shipping.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Joshua — AI Receptionist for NC Small Businesses | Bunn Communications</title>
+  <meta name="description" content="Joshua answers every call — 24/7 — so you never lose another booked job, emergency call, or client intake. Built in Clayton, NC by Bunn Communications. $249/month. 30 days free." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0e14;
+      --bg-panel: #121820;
+      --text: #e8ecf2;
+      --text-dim: #98a2b3;
+      --accent: #5b8def;
+      --accent-2: #7dd3fc;
+      --border: rgba(255,255,255,0.08);
+      --good: #4ade80;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+    header { padding: 24px 0; border-bottom: 1px solid var(--border); }
+    header .container { display: flex; align-items: center; justify-content: space-between; }
+    .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+    .brand small { font-weight: 400; color: var(--text-dim); font-size: 12px; margin-left: 6px; }
+    nav a { color: var(--text-dim); margin-left: 24px; font-size: 14px; }
+    nav a:hover { color: var(--text); }
+
+    /* Hero */
+    .hero { padding: 80px 0 64px; text-align: center; }
+    .hero h1 {
+      font-size: clamp(36px, 6vw, 56px);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin: 0 0 20px;
+    }
+    .hero h1 em { color: var(--accent); font-style: normal; }
+    .hero .sub {
+      font-size: clamp(17px, 2vw, 20px);
+      color: var(--text-dim);
+      max-width: 640px;
+      margin: 0 auto 36px;
+    }
+    .cta-row { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-block;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: #6fa0ff; text-decoration: none; transform: translateY(-1px); }
+    .btn-ghost { background: transparent; color: var(--text); border-color: var(--border); }
+    .btn-ghost:hover { background: var(--bg-panel); text-decoration: none; }
+    .trust { margin-top: 28px; color: var(--text-dim); font-size: 13px; }
+
+    /* Sections */
+    section { padding: 72px 0; border-top: 1px solid var(--border); }
+    section h2 {
+      font-size: clamp(26px, 3.5vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 0 0 12px;
+    }
+    section .intro {
+      color: var(--text-dim);
+      font-size: 17px;
+      max-width: 640px;
+      margin: 0 auto 40px;
+      text-align: center;
+    }
+    section h2.centered { text-align: center; }
+
+    /* How it works 3 panels */
+    .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px 24px;
+    }
+    .panel .num {
+      display: inline-block;
+      width: 36px; height: 36px; line-height: 34px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      border-radius: 10px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .panel h3 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+    .panel p { margin: 0; color: var(--text-dim); font-size: 15px; }
+
+    /* Who it's for */
+    .who-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+    .who-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+    }
+    .who-card h3 { margin: 0 0 10px; font-size: 17px; font-weight: 600; color: var(--accent-2); }
+    .who-card p { margin: 0; color: var(--text-dim); font-size: 14px; }
+
+    /* Pricing */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      align-items: stretch;
+    }
+    .price-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 24px;
+      display: flex; flex-direction: column;
+    }
+    .price-card.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .price-tier { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .price-amt { font-size: 38px; font-weight: 700; margin: 0 0 4px; }
+    .price-amt small { font-size: 14px; color: var(--text-dim); font-weight: 400; }
+    .price-sub { color: var(--text-dim); font-size: 14px; margin: 0 0 20px; }
+    .price-card ul { list-style: none; padding: 0; margin: 0 0 24px; flex: 1; }
+    .price-card li { padding: 6px 0; color: var(--text); font-size: 14px; display: flex; align-items: flex-start; gap: 10px; }
+    .price-card li:before { content: "✓"; color: var(--good); font-weight: 700; flex-shrink: 0; }
+
+    /* FAQ */
+    details {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 10px;
+      background: var(--bg-panel);
+    }
+    details[open] { border-color: var(--accent); }
+    summary { font-weight: 600; cursor: pointer; padding: 4px 0; font-size: 15px; }
+    details p { margin: 10px 0 0; color: var(--text-dim); font-size: 14px; }
+
+    /* CTA block */
+    .cta-block {
+      text-align: center;
+      padding: 80px 24px;
+      background: linear-gradient(180deg, transparent, rgba(91,141,239,0.08));
+      border-radius: 20px;
+      margin: 40px 0;
+    }
+    .cta-block h2 { margin-bottom: 12px; }
+    .cta-block p { color: var(--text-dim); margin: 0 0 28px; }
+
+    /* Footer */
+    footer { border-top: 1px solid var(--border); padding: 32px 0; color: var(--text-dim); font-size: 13px; }
+    footer .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+    footer a { color: var(--text-dim); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="brand">Bunn Communications <small>· est. 1985</small></div>
+    <nav>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="tel:9197736114">(919) 773-6114</a>
+    </nav>
+  </div>
+</header>
+
+<div class="container">
+
+  <section class="hero" style="border-top: none; padding-top: 80px;">
+    <h1>Another missed call<br>just cost you <em>$500</em>.</h1>
+    <p class="sub">Joshua answers every call — 24/7 — so you don't lose another emergency, another intake, another booked job. Built in Clayton, NC. Managed by a real person (that's me, Joey).</p>
+    <div class="cta-row">
+      <a href="{{STRIPE_PILOT_LINK}}" class="btn btn-primary">Start your 30-day free pilot</a>
+      <a href="{{CALENDLY_LINK}}" class="btn btn-ghost">Book a 15-min demo with Joey</a>
+    </div>
+    <div class="trust">No contract · Runs on your existing number · $249/month after pilot</div>
+  </section>
+
+  <section>
+    <h2 class="centered">How it works</h2>
+    <p class="intro">Three steps. Live within 24 hours of signup.</p>
+    <div class="panels">
+      <div class="panel">
+        <div class="num">1</div>
+        <h3>You keep your existing number.</h3>
+        <p>We forward calls to Joshua during hours you choose, or anytime you miss a call. No number change, no porting, no downtime.</p>
+      </div>
+      <div class="panel">
+        <div class="num">2</div>
+        <h3>Joshua answers, qualifies, books.</h3>
+        <p>Natural voice, not robotic. Schedules appointments, captures emergency requests, routes urgent calls straight to your cell.</p>
+      </div>
+      <div class="panel">
+        <div class="num">3</div>
+        <h3>You get a text after every call.</h3>
+        <p>Full transcript, caller info, suggested follow-up — delivered in under 60 seconds. No hidden data, no surprises.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="centered">Who it's for</h2>
+    <p class="intro">Any North Carolina small business that's losing calls to voicemail.</p>
+    <div class="who-grid">
+      <div class="who-card">
+        <h3>Roofers · Plumbers · Electricians</h3>
+        <p>One captured emergency call pays for two months of service. Storms don't wait for business hours.</p>
+      </div>
+      <div class="who-card">
+        <h3>Law firms</h3>
+        <p>Your intake is your front door. Don't let it close when you're in court.</p>
+      </div>
+      <div class="who-card">
+        <h3>Anyone missing calls</h3>
+        <p>If you miss 20% of calls, you're missing 20% of your revenue. Fix the leak.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <h2 class="centered">Simple, honest pricing</h2>
+    <p class="intro">One flat monthly rate. No per-minute charges. No contract. 30 days free to start.</p>
+    <div class="pricing-grid">
+
+      <div class="price-card">
+        <div class="price-tier">Starter</div>
+        <div class="price-amt">$249<small>/month</small></div>
+        <p class="price-sub">Solo operator — one location, one cell.</p>
+        <ul>
+          <li>24/7 call answering</li>
+          <li>Up to 300 calls/month</li>
+          <li>Appointment capture via email + SMS</li>
+          <li>Smart forwarding to 1 cell</li>
+          <li>English</li>
+          <li>White-glove setup with Joey</li>
+        </ul>
+        <a href="{{STRIPE_PILOT_LINK}}?tier=starter" class="btn btn-ghost">Start 30-day free pilot</a>
+      </div>
+
+      <div class="price-card featured">
+        <div class="price-tier" style="color: var(--accent);">Growth · most popular</div>
+        <div class="price-amt">$399<small>/month</small></div>
+        <p class="price-sub">2–5 person shops, small firms.</p>
+        <ul>
+          <li>Everything in Starter</li>
+          <li>Unlimited calls</li>
+          <li>3 routing destinations</li>
+          <li>1 calendar or CRM integration</li>
+          <li>Bilingual English / Spanish</li>
+          <li>Weekly call review with Joey</li>
+        </ul>
+        <a href="{{STRIPE_PILOT_LINK}}?tier=growth" class="btn btn-primary">Start 30-day free pilot</a>
+      </div>
+
+      <div class="price-card">
+        <div class="price-tier">Vertical Pro</div>
+        <div class="price-amt">$699<small>/month</small></div>
+        <p class="price-sub">Multi-location, integration-heavy.</p>
+        <ul>
+          <li>Everything in Growth</li>
+          <li>Custom vertical prompt tuning</li>
+          <li>CRM / EHR integration</li>
+          <li>Monthly optimization review</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="{{CALENDLY_LINK}}?tier=pro" class="btn btn-ghost">Book a call to scope</a>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2 class="centered">Questions you should ask</h2>
+    <p class="intro">If you don't see yours, call me: (919) 773-6114.</p>
+
+    <details>
+      <summary>Will it sound robotic?</summary>
+      <p>No. We use the same voice technology (ElevenLabs) as every premium voice-AI product on the market. Most callers can't tell it's AI. <a href="{{HOPE_DEMO_AUDIO_URL}}">Listen to a 30-second sample</a>.</p>
+    </details>
+
+    <details>
+      <summary>What if it mishandles a call?</summary>
+      <p>Every call's transcript reaches you within 60 seconds. If Joshua handled something wrong, you see it immediately and we tune it — every week of the pilot I personally review every call and adjust the prompts. After the pilot, weekly reviews continue on the Growth tier.</p>
+    </details>
+
+    <details>
+      <summary>What integrations do you have?</summary>
+      <p>Google Calendar, Calendly, Jobber, ServiceTitan, HubSpot, MailerLite, Zapier. We'll build custom ones on the Vertical Pro tier. Ask if you don't see yours.</p>
+    </details>
+
+    <details>
+      <summary>What happens to our call data?</summary>
+      <p>Audio is ephemeral — deleted at the end of each session, never stored or used for training. Transcripts are yours, stored on your private Bunn dashboard. We will sign an NDA before any pilot if you prefer. Law firms: we do not retain audio or train on your calls, ever.</p>
+    </details>
+
+    <details>
+      <summary>What if I want to cancel?</summary>
+      <p>30-day written notice, any time. No contracts. Your phone number stays your phone number — we just stop answering for you. The pilot period has zero commitment.</p>
+    </details>
+
+    <details>
+      <summary>How quickly can you set it up?</summary>
+      <p>Live on your number within 24 hours of signup. We configure the LiveKit dispatch rule, customize the greeting + vertical prompts for your business, and run a test call with you. Pilot starts the moment it's live.</p>
+    </details>
+
+    <details>
+      <summary>Are you HIPAA compliant?</summary>
+      <p>Not formally certified yet — if you're a medical practice handling PHI, we'll refer you to a HIPAA-native provider. Law firms: Joshua handles qualification and intake without taking privileged substantive content; sessions are ephemeral. Home services + real estate + accounting: no HIPAA concerns apply.</p>
+    </details>
+
+  </section>
+
+  <div class="cta-block">
+    <h2>Your next captured call pays for a month.</h2>
+    <p>30 days free. No card. Live in 24 hours. Cancel any time.</p>
+    <div class="cta-row">
+      <a href="{{STRIPE_PILOT_LINK}}" class="btn btn-primary">Start my free pilot</a>
+      <a href="tel:9197736114" class="btn btn-ghost">Call Joey: (919) 773-6114</a>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="container">
+    <div class="row">
+      <div>
+        Bunn Communications, Inc. · Clayton, NC · (919) 773-6114 · <a href="mailto:jxbunn@bunncom.com">jxbunn@bunncom.com</a>
+      </div>
+      <div>
+        <a href="/">bunncom.com</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
