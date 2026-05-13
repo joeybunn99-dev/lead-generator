@@ -29,3 +29,23 @@ nc-municipalities.json
 nc-municipalities-raw.json
 nc-municipalities-census.json
 n8n-lead-export.json
+
+# Database siblings + backups
+*.db-wal
+*.db-shm
+*.db.bak-*
+
+# Debug / screenshot pollution (Playwright + visual iteration)
+*.png
+*.jpeg
+*.jpg
+*.gif
+!email-templates/*.png
+
+# Playwright trace + MCP cache
+.playwright-mcp/
+bt-trace/
+snapshot-*.yml
+
+# Windows redirect artifact
+nul
